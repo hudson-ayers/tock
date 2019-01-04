@@ -60,7 +60,7 @@ impl<'a> IP6RecvClient for UDPReceiver<'a> {
                     );
                 });
             }
-            None => {}
+            None => {debug!("Failed to decpde UDP Payload.");}
         }
     }
 }

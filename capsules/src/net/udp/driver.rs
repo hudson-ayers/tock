@@ -580,7 +580,9 @@ impl<'a> UDPRecvClient for UDPDriver<'a> {
                     app.bound_port.as_ref().map(|requested_addr| {
                         if requested_addr.addr == dst_addr && requested_addr.port == dst_port {
                             for_me = true;
-                        }
+                         } else {
+                            debug!("dst port: {}, my dst port: {}", dst_port, requested_addr.port);
+                         }
                     });
                     if for_me {
                         let mut app_read = app.app_read.take();
