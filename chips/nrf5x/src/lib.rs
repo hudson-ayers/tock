@@ -3,6 +3,7 @@
 #![no_std]
 
 pub mod aes;
+pub mod comp;
 pub mod constants;
 pub mod gpio;
 pub mod peripheral_interrupts;

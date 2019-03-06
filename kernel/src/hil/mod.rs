@@ -3,6 +3,7 @@
 pub mod adc;
 pub mod analog_comparator;
 pub mod ble_advertising;
+pub mod comp;
 pub mod crc;
 pub mod dac;
 pub mod entropy;

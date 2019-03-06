@@ -73,10 +73,10 @@ impl<G: hil::gpio::Pin + hil::gpio::PinCtl> LED<'a, G> {
         // Make all pins output and off
         for &(pin, mode) in pins_init.as_ref().iter() {
             pin.make_output();
-            match mode {
-                ActivationMode::ActiveHigh => pin.clear(),
-                ActivationMode::ActiveLow => pin.set(),
-            }
+//            match mode {
+//                ActivationMode::ActiveHigh => pin.clear(),
+//                ActivationMode::ActiveLow => pin.set(),
+//            }
         }
 
         LED {

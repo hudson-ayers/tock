@@ -5,10 +5,12 @@
 
 #![no_std]
 #![no_main]
-#![deny(missing_docs)]
+//#![deny(missing_docs)]
 
 #[allow(unused_imports)]
 use kernel::{debug, debug_gpio, debug_verbose, static_init};
+use kernel::hil::comp::AnalogComparator;
+use kernel::hil::gpio::Pin;
 
 use nrf52dk_base::{SpiMX25R6435FPins, SpiPins, UartPins};
 
@@ -37,6 +39,28 @@ const SPI_CLK: usize = 19;
 const SPI_MX25R6435F_CHIP_SELECT: usize = 17;
 const SPI_MX25R6435F_WRITE_PROTECT_PIN: usize = 22;
 const SPI_MX25R6435F_HOLD_PIN: usize = 23;
+
+// Create a client struct
+pub struct clientStruct {
+    id: u16,
+    led_pin: &'static nrf5x::gpio::GPIOPin,
+}
+
+impl clientStruct {
+    fn new(led_pin: &'static nrf5x::gpio::GPIOPin) -> clientStruct {
+        clientStruct {
+            id: 0,
+            led_pin: led_pin,
+        }
+    }
+}
+
+impl kernel::hil::comp::Client<kernel::hil::comp::Pin, kernel::hil::comp::RefPin> for clientStruct {
+    fn event(&self, rising: bool, input: kernel::hil::comp::Pin, reference: kernel::hil::comp::RefPin) {
+        self.led_pin.make_output();
+        self.led_pin.set();
+    }
+}
 
 /// UART Writer
 #[macro_use]
@@ -132,6 +156,18 @@ pub unsafe fn reset_handler() {
     );
 
     let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new(&PROCESSES));
+
+    // Initialize analog comparator
+    let analog_comparator = static_init!(nrf5x::comp::Comp, nrf5x::comp::Comp::new());
+
+    let client = clientStruct::new(led_pins[0].0);
+
+    analog_comparator.set_client(&client);
+    let input_pin = kernel::hil::comp::Pin::AIN0;
+    let reference_pin = kernel::hil::comp::RefPin::AIN1;
+    let mode = kernel::hil::comp::OpModes::Diff;
+
+    analog_comparator.start_comparing(input_pin, reference_pin, true, mode);
 
     nrf52dk_base::setup_board(
         board_kernel,
