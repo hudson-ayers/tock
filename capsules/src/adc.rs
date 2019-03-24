@@ -34,6 +34,7 @@ use core::cmp;
 use kernel::common::cells::{MapCell, OptionalCell, TakeCell};
 use kernel::hil;
 use kernel::{AppId, AppSlice, Callback, Driver, ReturnCode, Shared};
+use kernel::debug;
 
 /// Syscall driver number.
 use crate::driver;
@@ -428,6 +429,7 @@ impl<A: hil::adc::Adc + hil::adc::AdcHighSpeed> Adc<'a, A> {
     fn stop_sampling(&self) -> ReturnCode {
         if !self.active.get() || self.mode.get() == AdcMode::NoMode {
             // already inactive!
+            debug!("already inactive");
             return ReturnCode::SUCCESS;
         }
 
@@ -436,9 +438,11 @@ impl<A: hil::adc::Adc + hil::adc::AdcHighSpeed> Adc<'a, A> {
         self.mode.set(AdcMode::NoMode);
         self.app_buf_offset.set(0);
 
+        debug!("stopping sampling");
         // actually cancel the operation
         let rc = self.adc.stop_sampling();
         if rc != ReturnCode::SUCCESS {
+            debug!("stop_samlping ret: {:?}", rc);
             return rc;
         }
 
