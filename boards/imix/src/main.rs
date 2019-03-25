@@ -274,6 +274,13 @@ pub unsafe fn reset_handler() {
         frequency: sam4l::pm::OscillatorFrequency::Frequency16MHz,
         startup_mode: sam4l::pm::OscillatorStartup::FastStart,
     });
+    //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::DfllRc32kAt48MHz);
+    //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RC80M);
+    //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RCFAST{frequency: sam4l::pm::RcfastFrequency::Frequency12MHz});
+    //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RCFAST{frequency: sam4l::pm::RcfastFrequency::Frequency8MHz});
+    //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RCFAST{frequency: sam4l::pm::RcfastFrequency::Frequency4MHz});
+    //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RC1M);
+    //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RcsysAt115kHz);
 
     // Source 32Khz and 1Khz clocks from RC23K (SAM4L Datasheet 11.6.8)
     sam4l::bpm::set_ck32source(sam4l::bpm::CK32Source::RC32K);

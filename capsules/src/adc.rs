@@ -429,7 +429,10 @@ impl<A: hil::adc::Adc + hil::adc::AdcHighSpeed> Adc<'a, A> {
     fn stop_sampling(&self) -> ReturnCode {
         if !self.active.get() || self.mode.get() == AdcMode::NoMode {
             // already inactive!
-            debug!("already inactive");
+            //debug!("already inactive");
+            //for my testing, make attempting to stop an already stopped adc operation actually
+            //disable the adc
+            self.adc.stop_sampling();
             return ReturnCode::SUCCESS;
         }
 
@@ -438,11 +441,11 @@ impl<A: hil::adc::Adc + hil::adc::AdcHighSpeed> Adc<'a, A> {
         self.mode.set(AdcMode::NoMode);
         self.app_buf_offset.set(0);
 
-        debug!("stopping sampling");
+        //debug!("stopping sampling");
         // actually cancel the operation
         let rc = self.adc.stop_sampling();
         if rc != ReturnCode::SUCCESS {
-            debug!("stop_samlping ret: {:?}", rc);
+            //debug!("stop_samlping ret: {:?}", rc);
             return rc;
         }
 

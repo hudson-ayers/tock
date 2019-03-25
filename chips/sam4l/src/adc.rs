@@ -27,6 +27,7 @@ use kernel::common::registers::{register_bitfields, ReadOnly, ReadWrite, WriteOn
 use kernel::common::StaticRef;
 use kernel::hil;
 use kernel::ReturnCode;
+use kernel::debug;
 
 /// Representation of an ADC channel on the SAM4L.
 pub struct AdcChannel {
@@ -461,6 +462,48 @@ impl Adc {
         );
     }
 
+    // temporary function to disable the adc when sampling is finished, so that
+    // the board can return to deep sleep.
+    // author: Hudson
+    fn disable(&self) -> ReturnCode {
+        if self.active.get() {
+            //dont disable without first stopping sampling
+            return ReturnCode::EBUSY;
+        }
+
+        if !self.enabled.get() {
+            //already disabled
+            return ReturnCode::EOFF;
+        }
+
+
+        let regs: &AdcRegisters = &*self.registers;
+
+        // disabling the ADC before switching clocks is necessary to avoid
+        // leaving it in undefined state
+        regs.cr.write(Control::DIS::SET);
+
+        // wait until status is disabled
+        let mut timeout = 10000;
+        while regs.sr.is_set(Status::EN) {
+            timeout -= 1;
+            if timeout == 0 {
+                // ADC never disabled
+                return ReturnCode::FAIL;
+            }
+        }
+        //Disable ADCIFE
+        pm::disable_clock(Clock::PBA(PBAClock::ADCIFE));
+
+        self.adc_clk_freq.set(0); //so that config and enable will happen again
+        scif::generic_clock_disable(
+            scif::GenericClock::GCLK10,
+        );
+        // software reset (does not clear registers)
+        regs.cr.write(Control::SWRST::SET);
+        ReturnCode::SUCCESS
+    }
+
     // Configures the ADC with the slowest clock that can provide continuous sampling at
     // the desired frequency and enables the ADC. Subsequent calls with the same frequency
     // value have no effect. Using the slowest clock also ensures efficient discrete
@@ -760,7 +803,11 @@ impl hil::adc::Adc for Adc {
             ReturnCode::EOFF
         } else if !self.active.get() {
             // cannot cancel sampling that isn't running
-            ReturnCode::EINVAL
+            // modified by Hudson to disable the adc on a second, erroneous  call to stop sampling()
+            //debug!("disabling");
+            let ret = self.disable();
+            ret
+            //ReturnCode::EINVAL
         } else {
             // clean up state
             self.active.set(false);
