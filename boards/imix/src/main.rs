@@ -134,8 +134,8 @@ struct Imix {
     spi: &'static capsules::spi::Spi<'static, VirtualSpiMasterDevice<'static, sam4l::spi::SpiHw>>,
     ipc: kernel::ipc::IPC,
     //ninedof: &'static capsules::ninedof::NineDof<'static>,
-    //radio_driver: &'static capsules::ieee802154::RadioDriver<'static>,
-    //udp_driver: &'static capsules::net::udp::UDPDriver<'static>,
+    radio_driver: &'static capsules::ieee802154::RadioDriver<'static>,
+    udp_driver: &'static capsules::net::udp::UDPDriver<'static>,
     //crc: &'static capsules::crc::Crc<'static, sam4l::crccu::Crccu<'static>>,
     //usb_driver: &'static capsules::usb_user::UsbSyscallDriver<
     //    'static,
@@ -178,8 +178,8 @@ impl kernel::Platform for Imix {
             //capsules::ninedof::DRIVER_NUM => f(Some(self.ninedof)),
             //capsules::crc::DRIVER_NUM => f(Some(self.crc)),
             //capsules::usb_user::DRIVER_NUM => f(Some(self.usb_driver)),
-            //capsules::ieee802154::DRIVER_NUM => f(Some(self.radio_driver)),
-            //capsules::net::udp::DRIVER_NUM => f(Some(self.udp_driver)),
+            capsules::ieee802154::DRIVER_NUM => f(Some(self.radio_driver)),
+            capsules::net::udp::DRIVER_NUM => f(Some(self.udp_driver)),
             //capsules::nrf51822_serialization::DRIVER_NUM => f(Some(self.nrf51822)),
             //capsules::nonvolatile_storage_driver::DRIVER_NUM => f(Some(self.nonvolatile_storage)),
             //capsules::rng::DRIVER_NUM => f(Some(self.rng)),
@@ -294,10 +294,10 @@ pub unsafe fn reset_handler() {
     let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
 
     power::configure_submodules(power::SubmoduleConfig {
-        rf233: false,
-        nrf51422: false,
-        sensors: false,
-        trng: false,
+        rf233: true,
+        nrf51422: true,
+        sensors: true,
+        trng: true,
     });
 
     let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new(&PROCESSES));
@@ -354,8 +354,8 @@ pub unsafe fn reset_handler() {
     sam4l::spi::SPI.init();
 
     let spi_syscalls = SpiSyscallComponent::new(mux_spi).finalize();
-    //let rf233_spi = SpiComponent::new(mux_spi).finalize();
-    /*let rf233 = RF233Component::new(
+    let rf233_spi = SpiComponent::new(mux_spi).finalize();
+    let rf233 = RF233Component::new(
         rf233_spi,
         &sam4l::gpio::PA[09], // reset
         &sam4l::gpio::PA[10], // sleep
@@ -363,7 +363,7 @@ pub unsafe fn reset_handler() {
         &sam4l::gpio::PA[08],
         RADIO_CHANNEL,
     )
-    .finalize();*/
+    .finalize();
 
     let adc = AdcComponent::new().finalize();
     let gpio = GpioComponent::new(board_kernel).finalize();
@@ -378,7 +378,7 @@ pub unsafe fn reset_handler() {
     // of the serial number of the sam4l for this device.  In the
     // future, we could generate the MAC address by hashing the full
     // 120-bit serial number
-    /*
+
     let serial_num: sam4l::serial_num::SerialNum = sam4l::serial_num::SerialNum::new();
     let serial_num_bottom_16 = (serial_num.get_lower_64() & 0x0000_0000_0000_ffff) as u16;
     let src_mac_from_serial_num: MacAddress = MacAddress::Short(serial_num_bottom_16);
@@ -386,7 +386,7 @@ pub unsafe fn reset_handler() {
     // Can this initialize be pushed earlier, or into component? -pal
     rf233.initialize(&mut RF233_BUF, &mut RF233_REG_WRITE, &mut RF233_REG_READ);
     let (radio_driver, mux_mac) =
-        RadioComponent::new(board_kernel, rf233, PAN_ID, serial_num_bottom_16).finalize();
+        RadioComponent::new(board_kernel, rf233, mux_alarm, PAN_ID, serial_num_bottom_16).finalize();
 
     let usb_driver = UsbComponent::new(board_kernel).finalize();
     let nonvolatile_storage = NonvolatileStorageComponent::new(board_kernel).finalize();
@@ -416,7 +416,7 @@ pub unsafe fn reset_handler() {
         local_ip_ifaces,
         mux_alarm,
     )
-    .finalize(); */
+    .finalize();
 
     let imix = Imix {
         //pconsole,
@@ -434,10 +434,10 @@ pub unsafe fn reset_handler() {
         //crc,
         spi: spi_syscalls,
         ipc: kernel::ipc::IPC::new(board_kernel, &grant_cap),
-        /*ninedof,
+        //ninedof,
         radio_driver,
         udp_driver,
-        usb_driver,
+        /*usb_driver,
         nrf51822: nrf_serialization,
         nonvolatile_storage: nonvolatile_storage,
         */
