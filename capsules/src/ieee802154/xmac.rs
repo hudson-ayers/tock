@@ -94,7 +94,7 @@ const WAKE_TIME_MS: u32 = 10;
 // Time the radio will sleep between wakes. Configurable to any desired value
 // less than or equal to the max time the transmitter sends preambles before
 // abandoning the transmission.
-const SLEEP_TIME_MS: u32 = 5000;
+const SLEEP_TIME_MS: u32 = 15000;
 // Time the radio will continue to send preamble packets before aborting the
 // transmission and returning ENOACK. Should be at least as large as the maximum
 // sleep time for any node in the network.
