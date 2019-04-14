@@ -270,15 +270,15 @@ unsafe fn set_pin_primary_functions() {
 pub unsafe fn reset_handler() {
     sam4l::init();
 
-    sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::PllExternalOscillatorAt48MHz {
+    /*sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::PllExternalOscillatorAt48MHz {
         frequency: sam4l::pm::OscillatorFrequency::Frequency16MHz,
         startup_mode: sam4l::pm::OscillatorStartup::FastStart,
-    });
+    });*/
     //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::DfllRc32kAt48MHz);
     //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RC80M);
     //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RCFAST{frequency: sam4l::pm::RcfastFrequency::Frequency12MHz});
     //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RCFAST{frequency: sam4l::pm::RcfastFrequency::Frequency8MHz});
-    //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RCFAST{frequency: sam4l::pm::RcfastFrequency::Frequency4MHz});
+    sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RCFAST{frequency: sam4l::pm::RcfastFrequency::Frequency4MHz});
     //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RC1M);
     //sam4l::pm::PM.setup_system_clock(sam4l::pm::SystemClockSource::RcsysAt115kHz);
 
@@ -452,12 +452,12 @@ pub unsafe fn reset_handler() {
     // These two lines need to be below the creation of the chip for
     // initialization to work.
     //
-    /*
+
     rf233.reset();
     rf233.start();
 
-    imix.pconsole.start();
-    */
+    //imix.pconsole.start();
+
 
     // Optional kernel tests. Note that these might conflict
     // with normal operation (e.g., steal callbacks from drivers, etc.),
