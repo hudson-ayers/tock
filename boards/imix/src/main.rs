@@ -27,6 +27,7 @@ use kernel::hil::spi::SpiMaster;
 use kernel::hil::Controller;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, static_init};
+use kernel::udp_port_table::{UdpPortTable, UdpPortSocket};
 
 use components::adc::AdcComponent;
 use components::alarm::AlarmDriverComponent;
@@ -68,6 +69,9 @@ mod ipv6_lowpan_test;
 mod spi_dummy;
 #[allow(dead_code)]
 mod udp_lowpan_test;
+
+#[allow(dead_code)]
+mod mock_udp_test;
 
 #[allow(dead_code)]
 mod aes_test;
@@ -401,27 +405,36 @@ pub unsafe fn reset_handler() {
         ]
     );
 
-    let mock_udp1 = MockUDPComponent::new(
-        mux_mac,
-        DEFAULT_CTX_PREFIX_LEN,
-        DEFAULT_CTX_PREFIX,
-        DST_MAC_ADDR,
-        src_mac_from_serial_num,
-        local_ip_ifaces,
-        mux_alarm,
-    )
-    .finalize();
+    let udp_port_table = static_init!(UdpPortTable, UdpPortTable::new());
 
-    /*let mock_udp2 = MockUDPComponent2::new(
+
+    /*let udp_lowpan_test = */mock_udp_test::initialize_all(
         mux_mac,
-        DEFAULT_CTX_PREFIX_LEN,
-        DEFAULT_CTX_PREFIX,
-        DST_MAC_ADDR,
-        src_mac_from_serial_num,
-        local_ip_ifaces,
-        mux_alarm,
-    )
-    .finalize();*/
+        mux_alarm as &'static MuxAlarm<'static, sam4l::ast::Ast>,
+        udp_port_table,
+    );
+
+    // let mock_udp1 = MockUDPComponent::new(
+    //     mux_mac,
+    //     DEFAULT_CTX_PREFIX_LEN,
+    //     DEFAULT_CTX_PREFIX,
+    //     DST_MAC_ADDR,
+    //     src_mac_from_serial_num,
+    //     local_ip_ifaces,
+    //     mux_alarm,
+    // )
+    // .finalize();
+
+    // let mock_udp2 = MockUDPComponent2::new(
+    //     mux_mac,
+    //     DEFAULT_CTX_PREFIX_LEN,
+    //     DEFAULT_CTX_PREFIX,
+    //     DST_MAC_ADDR,
+    //     src_mac_from_serial_num,
+    //     local_ip_ifaces,
+    //     mux_alarm,
+    // )
+    //.finalize();
     /*
     let udp_driver = UDPComponent::new(
         board_kernel,
@@ -497,7 +510,7 @@ pub unsafe fn reset_handler() {
 
     debug!("Initialization complete. Entering main loop");
 
-    mock_udp1.start();
+    //mock_udp1.start();
     //udp_lowpan_test.start();
 
     //mock_udp.send(27);
