@@ -31,6 +31,7 @@ use capsules::net::udp::udp_recv::UDPReceiver;
 use capsules::net::udp::udp_send::{UDPSendStruct, UDPSender, MuxUdpSender};
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use kernel::{create_capability, static_init};
+use kernel::udp_port_table::UdpPortTable;
 
 use kernel;
 use kernel::capabilities;
@@ -60,6 +61,7 @@ pub struct UDPComponent {
     src_mac_addr: MacAddress,
     interface_list: &'static [IPAddr],
     alarm_mux: &'static MuxAlarm<'static, sam4l::ast::Ast<'static>>,
+    port_table: &'static UdpPortTable,
 }
 
 impl UDPComponent {
@@ -72,6 +74,7 @@ impl UDPComponent {
         src_mac_addr: MacAddress,
         interface_list: &'static [IPAddr],
         alarm: &'static MuxAlarm<'static, sam4l::ast::Ast<'static>>,
+        port_table: &'static UdpPortTable,
     ) -> UDPComponent {
         UDPComponent {
             board_kernel: board_kernel,
@@ -82,6 +85,7 @@ impl UDPComponent {
             src_mac_addr: src_mac_addr,
             interface_list: interface_list,
             alarm_mux: alarm,
+            port_table: port_table,
         }
     }
 }
@@ -197,7 +201,8 @@ impl Component for UDPComponent {
                 udp_recv,
                 self.board_kernel.create_grant(&grant_cap),
                 self.interface_list,
-                PAYLOAD_LEN
+                PAYLOAD_LEN,
+                self.port_table,
             )
         );
         udp_send.set_client(udp_driver);

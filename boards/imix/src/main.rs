@@ -435,7 +435,9 @@ pub unsafe fn reset_handler() {
     //     mux_alarm,
     // )
     //.finalize();
-    /*
+
+    // UDP driver initialization happens here
+    // UDPComponent is defined in udp_6lowpan.rs
     let udp_driver = UDPComponent::new(
         board_kernel,
         mux_mac,
@@ -445,9 +447,12 @@ pub unsafe fn reset_handler() {
         src_mac_from_serial_num,
         local_ip_ifaces,
         mux_alarm,
+        udp_port_table,
     )
     .finalize();
-    */
+
+    udp_port_table.set_user_ports(udp_driver);
+
     /*let udp_lowpan_test = udp_lowpan_test::initialize_all(
         mux_mac,
         mux_alarm as &'static MuxAlarm<'static, sam4l::ast::Ast>,
