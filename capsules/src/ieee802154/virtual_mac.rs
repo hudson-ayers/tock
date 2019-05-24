@@ -32,6 +32,7 @@ use core::cell::Cell;
 use kernel::common::cells::{MapCell, OptionalCell};
 use kernel::common::{List, ListLink, ListNode};
 use kernel::ReturnCode;
+use kernel::net_permissions::EncryptionMode;
 
 /// IEE 802.15.4 MAC device muxer that keeps a list of MAC users and sequences
 /// any pending transmission requests. Any received frames from the underlying
@@ -40,6 +41,7 @@ pub struct MuxMac<'a> {
     mac: &'a device::MacDevice<'a>,
     users: List<'a, MacUser<'a>>,
     inflight: OptionalCell<&'a MacUser<'a>>,
+    encr_mode: &'a EncryptionMode<'a>,
 }
 
 impl device::TxClient for MuxMac<'a> {
@@ -60,11 +62,13 @@ impl device::RxClient for MuxMac<'a> {
 }
 
 impl MuxMac<'a> {
-    pub const fn new(mac: &'a device::MacDevice<'a>) -> MuxMac<'a> {
+    pub const fn new(mac: &'a device::MacDevice<'a>,
+        encr_mode: &'a EncryptionMode<'a>) -> MuxMac<'a> {
         MuxMac {
             mac: mac,
             users: List::new(),
             inflight: OptionalCell::empty(),
+            encr_mode: encr_mode,
         }
     }
 
@@ -101,7 +105,7 @@ impl MuxMac<'a> {
     /// buffer to the `MacUser` via its transmit client.
     fn perform_op_async(&self, node: &'a MacUser<'a>, op: Op) {
         if let Op::Transmit(frame) = op {
-            let (result, mbuf) = self.mac.transmit(frame);
+            let (result, mbuf) = self.mac.transmit(frame, &self.encr_mode);
             // If a buffer is returned, the transmission failed,
             // otherwise it succeeded.
             mbuf.map(|buf| {
@@ -121,7 +125,7 @@ impl MuxMac<'a> {
         op: Op,
     ) -> Option<(ReturnCode, Option<&'static mut [u8]>)> {
         if let Op::Transmit(frame) = op {
-            let (result, mbuf) = self.mac.transmit(frame);
+            let (result, mbuf) = self.mac.transmit(frame, &self.encr_mode);
             if result == ReturnCode::SUCCESS {
                 self.inflight.set(node);
             }
@@ -278,7 +282,7 @@ impl device::MacDevice<'a> for MacUser<'a> {
             .prepare_data_frame(buf, dst_pan, dst_addr, src_pan, src_addr, security_needed)
     }
 
-    fn transmit(&self, frame: framer::Frame) -> (ReturnCode, Option<&'static mut [u8]>) {
+    fn transmit(&self, frame: framer::Frame, mode: &EncryptionMode) -> (ReturnCode, Option<&'static mut [u8]>) {
         // If the muxer is idle, immediately transmit the frame, otherwise
         // attempt to queue the transmission request. However, each MAC user can
         // only have one pending transmission request, so if there already is a

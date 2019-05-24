@@ -80,6 +80,7 @@ use core::cell::Cell;
 use kernel::common::cells::{MapCell, OptionalCell};
 use kernel::hil::radio;
 use kernel::hil::symmetric_encryption::{CCMClient, AES128CCM};
+use kernel::net_permissions::EncryptionMode;
 use kernel::ReturnCode;
 
 /// A `Frame` wraps a static mutable byte slice and keeps just enough
@@ -763,7 +764,8 @@ impl<M: Mac, A: AES128CCM<'a>> MacDevice<'a> for Framer<'a, M, A> {
         }
     }
 
-    fn transmit(&self, frame: Frame) -> (ReturnCode, Option<&'static mut [u8]>) {
+    fn transmit(&self, frame: Frame, mode: &EncryptionMode) ->
+        (ReturnCode, Option<&'static mut [u8]>) {
         let Frame { buf, info } = frame;
         let state = match self.tx_state.take() {
             None => {

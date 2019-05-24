@@ -27,6 +27,7 @@ use kernel::hil::radio::RadioData;
 use kernel::hil::symmetric_encryption;
 use kernel::hil::symmetric_encryption::{AES128, AES128CCM};
 use kernel::static_init;
+use kernel::net_permissions::EncryptionMode;
 
 // Save some deep nesting
 type RF233Device =
@@ -37,6 +38,7 @@ pub struct RadioComponent {
     rf233: &'static RF233Device,
     pan_id: capsules::net::ieee802154::PanID,
     short_addr: u16,
+    encr_mode: &'static EncryptionMode<'static>,
 }
 
 impl RadioComponent {
@@ -45,12 +47,14 @@ impl RadioComponent {
         rf233: &'static RF233Device,
         pan_id: capsules::net::ieee802154::PanID,
         addr: u16,
+        encr_mode: &'static EncryptionMode<'static>,
     ) -> RadioComponent {
         RadioComponent {
             board_kernel: board_kernel,
             rf233: rf233,
             pan_id: pan_id,
             short_addr: addr,
+            encr_mode: encr_mode,
         }
     }
 }
@@ -104,7 +108,8 @@ impl Component for RadioComponent {
 
         let mux_mac = static_init!(
             capsules::ieee802154::virtual_mac::MuxMac<'static>,
-            capsules::ieee802154::virtual_mac::MuxMac::new(mac_device)
+            capsules::ieee802154::virtual_mac::MuxMac::new(mac_device,
+                self.encr_mode)
         );
         mac_device.set_transmit_client(mux_mac);
         mac_device.set_receive_client(mux_mac);
@@ -120,7 +125,8 @@ impl Component for RadioComponent {
             capsules::ieee802154::RadioDriver::new(
                 radio_mac,
                 self.board_kernel.create_grant(&grant_cap),
-                &mut RADIO_BUF
+                &mut RADIO_BUF,
+                self.encr_mode,
             )
         );
 

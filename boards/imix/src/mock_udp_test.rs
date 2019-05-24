@@ -23,6 +23,8 @@ use kernel::hil::time::Frequency;
 use kernel::static_init;
 use kernel::udp_port_table::{UdpPortTable, UdpPortSocket};
 use kernel::ReturnCode;
+use kernel::capabilities;
+use kernel::net_permissions::EncryptionMode;
 
 const DST_MAC_ADDR: MacAddress = MacAddress::Short(49138);
 const DEFAULT_CTX_PREFIX_LEN: u8 = 8; //Length of context for 6LoWPAN compression
@@ -62,6 +64,10 @@ pub unsafe fn initialize_all(
         ]
     );
 
+    struct ucap;
+    unsafe impl capabilities::UnencryptedDataCapability for ucap {}
+    static unencr_mode: EncryptionMode = EncryptionMode::Unencrypted(&ucap);
+
     let mock_udp1 = MockUDPComponent::new(
         mux_mac,
         DEFAULT_CTX_PREFIX_LEN,
@@ -70,6 +76,7 @@ pub unsafe fn initialize_all(
         src_mac_from_serial_num,
         local_ip_ifaces,
         mux_alarm,
+        &unencr_mode,
     ).finalize();
 
     let mock_udp2 = MockUDPComponent2::new(
@@ -80,6 +87,7 @@ pub unsafe fn initialize_all(
         src_mac_from_serial_num,
         local_ip_ifaces,
         mux_alarm,
+        &unencr_mode,
     ).finalize();
     let mock_udp_test_alarm = VirtualMuxAlarm::new(mux_alarm);
     let mock_udp_test = static_init!(
@@ -93,6 +101,8 @@ pub unsafe fn initialize_all(
             port_table,
         )
     );
+
+
     // TODO: initialize stuff/set clients etc.
     mock_udp_test
 

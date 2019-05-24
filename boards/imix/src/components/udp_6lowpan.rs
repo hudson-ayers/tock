@@ -32,6 +32,7 @@ use capsules::net::udp::udp_send::{UDPSendStruct, UDPSender, MuxUdpSender};
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use kernel::{create_capability, static_init};
 use kernel::udp_port_table::UdpPortTable;
+use kernel::net_permissions::EncryptionMode;
 
 use kernel;
 use kernel::capabilities;
@@ -62,6 +63,7 @@ pub struct UDPComponent {
     interface_list: &'static [IPAddr],
     alarm_mux: &'static MuxAlarm<'static, sam4l::ast::Ast<'static>>,
     port_table: &'static UdpPortTable,
+    encr_mode: &'static EncryptionMode<'static>,
 }
 
 impl UDPComponent {
@@ -75,6 +77,7 @@ impl UDPComponent {
         interface_list: &'static [IPAddr],
         alarm: &'static MuxAlarm<'static, sam4l::ast::Ast<'static>>,
         port_table: &'static UdpPortTable,
+        encr_mode: &'static EncryptionMode<'static>,
     ) -> UDPComponent {
         UDPComponent {
             board_kernel: board_kernel,
@@ -86,6 +89,7 @@ impl UDPComponent {
             interface_list: interface_list,
             alarm_mux: alarm,
             port_table: port_table,
+            encr_mode: encr_mode,
         }
     }
 }
@@ -151,7 +155,8 @@ impl Component for UDPComponent {
                 sixlowpan_tx,
                 udp_mac,
                 self.dst_mac_addr,
-                self.src_mac_addr
+                self.src_mac_addr,
+                self.encr_mode,
             )
         );
         ipsender_virtual_alarm.set_client(ip_send);

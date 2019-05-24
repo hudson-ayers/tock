@@ -26,6 +26,7 @@ use kernel::common::cells::{OptionalCell, TakeCell};
 use kernel::debug;
 use kernel::hil::time::{self, Frequency};
 use kernel::ReturnCode;
+use kernel::net_permissions::EncryptionMode;
 
 /// This trait must be implemented by upper layers in order to receive
 /// the `send_done` callback when a transmission has completed. The upper
@@ -97,6 +98,7 @@ pub struct IP6SendStruct<'a, A: time::Alarm> {
     dst_mac_addr: MacAddress,
     src_mac_addr: MacAddress,
     client: OptionalCell<&'a IP6SendClient>,
+    encr_mode: &'a EncryptionMode<'a>,
 }
 
 impl<A: time::Alarm> IP6Sender<'a> for IP6SendStruct<'a, A> {
@@ -145,6 +147,7 @@ impl<A: time::Alarm> IP6SendStruct<'a, A> {
         radio: &'a MacDevice<'a>,
         dst_mac_addr: MacAddress,
         src_mac_addr: MacAddress,
+        encr_mode: &'a EncryptionMode<'a>,
     ) -> IP6SendStruct<'a, A> {
         IP6SendStruct {
             ip6_packet: TakeCell::new(ip6_packet),
@@ -157,6 +160,7 @@ impl<A: time::Alarm> IP6SendStruct<'a, A> {
             dst_mac_addr: dst_mac_addr,
             src_mac_addr: src_mac_addr,
             client: OptionalCell::empty(),
+            encr_mode: encr_mode
         }
     }
 
@@ -194,7 +198,8 @@ impl<A: time::Alarm> IP6SendStruct<'a, A> {
                                 send = true;
                                 return (send_complete_return, send);
                             } else {
-                                let (err, _frame_option) = self.radio.transmit(frame);
+                                let (err, _frame_option) =
+                                    self.radio.transmit(frame, &self.encr_mode);
                                 return (err, send);
                             }
                         }

@@ -11,6 +11,7 @@ use core::cell::Cell;
 use core::cmp::min;
 use kernel::common::cells::{MapCell, OptionalCell, TakeCell};
 use kernel::{AppId, AppSlice, Callback, Driver, Grant, ReturnCode, Shared};
+use kernel::net_permissions::EncryptionMode;
 
 const MAX_NEIGHBORS: usize = 4;
 const MAX_KEYS: usize = 4;
@@ -189,6 +190,8 @@ pub struct RadioDriver<'a> {
 
     /// Buffer that stores the IEEE 802.15.4 frame to be transmitted.
     kernel_tx: TakeCell<'static, [u8]>,
+
+    encr_mode: &'a EncryptionMode<'a>
 }
 
 impl RadioDriver<'a> {
@@ -196,6 +199,7 @@ impl RadioDriver<'a> {
         mac: &'a device::MacDevice<'a>,
         grant: Grant<App>,
         kernel_tx: &'static mut [u8],
+        encr_mode: &'a EncryptionMode<'a>,
     ) -> RadioDriver<'a> {
         RadioDriver {
             mac: mac,
@@ -206,6 +210,7 @@ impl RadioDriver<'a> {
             apps: grant,
             current_app: OptionalCell::empty(),
             kernel_tx: TakeCell::new(kernel_tx),
+            encr_mode: encr_mode,
         }
     }
 
@@ -452,7 +457,7 @@ impl RadioDriver<'a> {
                 }
 
                 // Finally, transmit the frame
-                let (result, mbuf) = self.mac.transmit(frame);
+                let (result, mbuf) = self.mac.transmit(frame, &self.encr_mode);
                 if let Some(buf) = mbuf {
                     self.kernel_tx.replace(buf);
                 }

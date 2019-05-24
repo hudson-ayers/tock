@@ -28,6 +28,7 @@ use kernel::hil::Controller;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, static_init};
 use kernel::udp_port_table::{UdpPortTable, UdpPortSocket};
+use kernel::net_permissions::EncryptionMode;
 
 use components::adc::AdcComponent;
 use components::alarm::AlarmDriverComponent;
@@ -143,7 +144,7 @@ struct Imix {
     ipc: kernel::ipc::IPC,
     ninedof: &'static capsules::ninedof::NineDof<'static>,
     radio_driver: &'static capsules::ieee802154::RadioDriver<'static>,
-    //udp_driver: &'static capsules::net::udp::UDPDriver<'static>,
+    udp_driver: &'static capsules::net::udp::UDPDriver<'static>,
     crc: &'static capsules::crc::Crc<'static, sam4l::crccu::Crccu<'static>>,
     usb_driver: &'static capsules::usb_user::UsbSyscallDriver<
         'static,
@@ -169,6 +170,8 @@ static mut RF233_BUF: [u8; radio::MAX_BUF_SIZE] = [0x00; radio::MAX_BUF_SIZE];
 static mut RF233_REG_WRITE: [u8; 2] = [0x00; 2];
 static mut RF233_REG_READ: [u8; 2] = [0x00; 2];
 
+
+
 impl kernel::Platform for Imix {
     fn with_driver<F, R>(&self, driver_num: usize, f: F) -> R
     where
@@ -190,7 +193,7 @@ impl kernel::Platform for Imix {
             capsules::crc::DRIVER_NUM => f(Some(self.crc)),
             capsules::usb_user::DRIVER_NUM => f(Some(self.usb_driver)),
             capsules::ieee802154::DRIVER_NUM => f(Some(self.radio_driver)),
-            //capsules::net::udp::DRIVER_NUM => f(Some(self.udp_driver)),
+            capsules::net::udp::DRIVER_NUM => f(Some(self.udp_driver)),
             capsules::nrf51822_serialization::DRIVER_NUM => f(Some(self.nrf51822)),
             capsules::nonvolatile_storage_driver::DRIVER_NUM => f(Some(self.nonvolatile_storage)),
             capsules::rng::DRIVER_NUM => f(Some(self.rng)),
@@ -296,6 +299,17 @@ pub unsafe fn reset_handler() {
     let process_mgmt_cap = create_capability!(capabilities::ProcessManagementCapability);
     let main_cap = create_capability!(capabilities::MainLoopCapability);
     let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
+    // In order to make unencr_cap static.
+    struct ucap;
+    unsafe impl capabilities::UnencryptedDataCapability for ucap {}
+    static foo: ucap = ucap;
+    //let ucap = create_capability!(capabilities::UnencryptedDataCapability);
+    // static unencr_mode: EncryptionMode = EncryptionMode::Unencrypted(&ucap);
+    static unencr_mode: EncryptionMode = EncryptionMode::Unencrypted(
+        &create_capability!(capabilities::UnencryptedDataCapability));
+
+
+    
 
     power::configure_submodules(power::SubmoduleConfig {
         rf233: true,
@@ -385,7 +399,8 @@ pub unsafe fn reset_handler() {
     // Can this initialize be pushed earlier, or into component? -pal
     rf233.initialize(&mut RF233_BUF, &mut RF233_REG_WRITE, &mut RF233_REG_READ);
     let (radio_driver, mux_mac) =
-        RadioComponent::new(board_kernel, rf233, PAN_ID, serial_num_bottom_16).finalize();
+        RadioComponent::new(board_kernel, rf233, PAN_ID, serial_num_bottom_16,
+            &unencr_mode).finalize();
 
     let usb_driver = UsbComponent::new(board_kernel).finalize();
     let nonvolatile_storage = NonvolatileStorageComponent::new(board_kernel).finalize();
@@ -408,11 +423,11 @@ pub unsafe fn reset_handler() {
     let udp_port_table = static_init!(UdpPortTable, UdpPortTable::new());
 
 
-    /*let udp_lowpan_test = */mock_udp_test::initialize_all(
+    /*let mock_udp_test = mock_udp_test::initialize_all(
         mux_mac,
         mux_alarm as &'static MuxAlarm<'static, sam4l::ast::Ast>,
         udp_port_table,
-    );
+    );*/
 
     // let mock_udp1 = MockUDPComponent::new(
     //     mux_mac,
@@ -448,6 +463,7 @@ pub unsafe fn reset_handler() {
         local_ip_ifaces,
         mux_alarm,
         udp_port_table,
+        &unencr_mode,
     )
     .finalize();
 
@@ -476,7 +492,7 @@ pub unsafe fn reset_handler() {
         ipc: kernel::ipc::IPC::new(board_kernel, &grant_cap),
         ninedof,
         radio_driver,
-        //udp_driver,
+        udp_driver,
         usb_driver,
         nrf51822: nrf_serialization,
         nonvolatile_storage: nonvolatile_storage,

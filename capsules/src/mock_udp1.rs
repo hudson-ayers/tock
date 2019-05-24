@@ -51,6 +51,10 @@ impl<'a, A: Alarm> MockUdp1<'a, A> {
         }
     }
 
+    pub fn bind_to(&self, port: u16) {
+        //self.port_table.bind()
+    }
+
     pub fn start(&self) {
         debug!("Start called in mock_udp1");
         let socket = self.port_table.create_socket();
@@ -61,13 +65,13 @@ impl<'a, A: Alarm> MockUdp1<'a, A> {
             return;
         }
         let socket = socket.ok().unwrap();
-        let binding = self.port_table.bind(socket, 80);
-        if binding.is_ok() {
-            debug!("Binding successfully created in mock_udp1");
-        } else {
-            debug!("Binding error in mock_udp1");
-            return;
-        }
+        // let binding = self.port_table.bind(socket, 80);
+        // if binding.is_ok() {
+        //     debug!("Binding successfully created in mock_udp1");
+        // } else {
+        //     debug!("Binding error in mock_udp1");
+        //     return;
+        // }
         // self.socket.replace(socket);
         // self.binding.replace(binding);
         self.alarm.set_alarm(self.alarm.now().
@@ -79,9 +83,9 @@ impl<'a, A: Alarm> MockUdp1<'a, A> {
 
         // UDP_DGRAM[0] = (value >> 8) as u8;
         // UDP_DGRAM[1] = (value & 0x00ff) as u8;
-        let tmp = self.udp_sender
-            .send_to(DST_ADDR, DST_PORT, SRC_PORT, &UDP_DGRAM);
-        debug!("Initial send result: {:?}", tmp);
+        // let tmp = self.udp_sender
+        //     .send_to(DST_ADDR, DST_PORT, SRC_PORT, &UDP_DGRAM);
+        // debug!("Initial send result: {:?}", tmp);
     }
 }
 

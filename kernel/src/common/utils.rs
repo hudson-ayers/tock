@@ -81,3 +81,15 @@ macro_rules! create_capability {
         Cap
     };};
 }
+
+
+
+#[macro_export]
+macro_rules! create_static_capability {
+    ($T:ty) => {{
+        struct Cap;
+        unsafe impl $T for Cap {}
+        static CapStruct: Cap = Cap;
+        CapStruct
+    ;};}
+}

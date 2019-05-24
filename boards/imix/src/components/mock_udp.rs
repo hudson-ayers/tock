@@ -24,6 +24,7 @@ use kernel::component::Component;
 use kernel::create_capability;
 use kernel::hil::radio;
 use kernel::static_init;
+use kernel::net_permissions::EncryptionMode;
 
 const PAYLOAD_LEN: usize = 200;
 
@@ -50,6 +51,7 @@ pub struct MockUDPComponent {
     src_mac_addr: MacAddress,
     interface_list: &'static [IPAddr],
     alarm_mux: &'static MuxAlarm<'static, sam4l::ast::Ast<'static>>,
+    encr_mode: &'static EncryptionMode<'static>,
 }
 
 
@@ -63,6 +65,7 @@ impl MockUDPComponent {
         src_mac_addr: MacAddress,
         interface_list: &'static [IPAddr],
         alarm: &'static MuxAlarm<'static, sam4l::ast::Ast<'static>>,
+        encr_mode:&'static EncryptionMode<'static>,
     ) -> MockUDPComponent {
         MockUDPComponent {
             mux_mac: mux_mac,
@@ -73,6 +76,7 @@ impl MockUDPComponent {
             src_mac_addr: src_mac_addr,
             interface_list: interface_list,
             alarm_mux: alarm,
+            encr_mode: encr_mode,
         }
     }
 }
@@ -140,7 +144,8 @@ impl Component for MockUDPComponent {
                 sixlowpan_tx,
                 udp_mac,
                 self.dst_mac_addr,
-                self.src_mac_addr
+                self.src_mac_addr,
+                self.encr_mode,
             )
         );
 

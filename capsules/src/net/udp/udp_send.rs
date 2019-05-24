@@ -14,6 +14,7 @@ use kernel::ReturnCode;
 use kernel::udp_port_table::{UdpPortTable, UdpSenderBinding};
 use kernel::common::{List, ListLink, ListNode};
 use kernel::debug;
+use kernel::capabilities;
 use core::cell::Cell;
 
 static mut curr_send_id: usize = 0;
@@ -120,7 +121,7 @@ pub trait UDPSender<'a> {
     /// Any synchronous errors are returned via the returned `ReturnCode`
     /// value; asynchronous errors are delivered via the callback.
     fn send_to(&'a self, dest: IPAddr, dst_port: u16, src_port: u16, buf: &'static [u8],
-        //binding: &UdpSenderBinding
+        binding: &UdpSenderBinding
         ) -> ReturnCode;
 
     /// This function constructs an IP packet from the completed `UDPHeader`
@@ -167,11 +168,10 @@ impl<T: IP6Sender<'a>> UDPSender<'a> for UDPSendStruct<'a, T> {
     }
 
     fn send_to(&'a self, dest: IPAddr, dst_port: u16, src_port: u16, buf: &'static [u8],
-        //binding: &UdpSenderBinding
-        ) -> ReturnCode {
+        binding: &UdpSenderBinding) -> ReturnCode {
         let mut udp_header = UDPHeader::new();
         udp_header.set_dst_port(dst_port);
-        udp_header.set_src_port(src_port/*binding.get_port()*/);
+        udp_header.set_src_port(binding.get_port());
         // TODO: add appropriate error handling here
         self.send(dest, udp_header, buf)
 
@@ -207,5 +207,15 @@ impl<T: IP6Sender<'a>> UDPSendStruct<'a, T> {
             next_th: OptionalCell::empty(),
             //binding: binding,
         }
+    }
+
+    // A function that allows the UDP driver to circumvent the port table.
+    pub fn driver_send_to(&'a self, dest: IPAddr, dst_port: u16, src_port: u16, buf: &'static [u8],
+        cap: &capabilities::UdpDriverCapability) -> ReturnCode {
+        let mut udp_header = UDPHeader::new();
+        udp_header.set_dst_port(dst_port);
+        udp_header.set_src_port(src_port/*binding.get_port()*/);
+        // TODO: add appropriate error handling here
+        self.send(dest, udp_header, buf)
     }
 }

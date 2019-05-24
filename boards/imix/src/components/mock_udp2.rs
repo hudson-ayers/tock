@@ -19,6 +19,7 @@ use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 
 use kernel::capabilities;
 use kernel::udp_port_table::{UdpPortTable};
+use kernel::net_permissions::EncryptionMode;
 
 use kernel::component::Component;
 use kernel::create_capability;
@@ -50,6 +51,7 @@ pub struct MockUDPComponent2 {
     src_mac_addr: MacAddress,
     interface_list: &'static [IPAddr],
     alarm_mux: &'static MuxAlarm<'static, sam4l::ast::Ast<'static>>,
+    encr_mode: &'static EncryptionMode<'static>,
 }
 
 
@@ -63,6 +65,7 @@ impl MockUDPComponent2 {
         src_mac_addr: MacAddress,
         interface_list: &'static [IPAddr],
         alarm: &'static MuxAlarm<'static, sam4l::ast::Ast<'static>>,
+        encr_mode: &'static EncryptionMode<'static>
     ) -> MockUDPComponent2 {
         MockUDPComponent2 {
             mux_mac: mux_mac,
@@ -73,6 +76,7 @@ impl MockUDPComponent2 {
             src_mac_addr: src_mac_addr,
             interface_list: interface_list,
             alarm_mux: alarm,
+            encr_mode: encr_mode,
         }
     }
 }
@@ -140,7 +144,8 @@ impl Component for MockUDPComponent2 {
                 sixlowpan_tx,
                 udp_mac,
                 self.dst_mac_addr,
-                self.src_mac_addr
+                self.src_mac_addr,
+                self.encr_mode,
             )
         );
 
