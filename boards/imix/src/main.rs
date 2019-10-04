@@ -81,6 +81,9 @@ mod power;
 #[allow(dead_code)]
 mod virtual_uart_rx_test;
 
+#[allow(dead_code)]
+mod stack_overflow_test;
+
 // State for loading apps.
 
 const NUM_PROCS: usize = 4;
@@ -461,6 +464,7 @@ pub unsafe fn reset_handler() {
     // aes_test::run_aes128_cbc();
 
     debug!("Initialization complete. Entering main loop");
+    stack_overflow_test::fib(100);
 
     extern "C" {
         /// Beginning of the ROM region containing app images.
