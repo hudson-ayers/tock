@@ -332,8 +332,7 @@ pub unsafe extern "C" fn hard_fault_handler() {
     let kernel_stack: bool;
 
     if (core::ptr::read_volatile(0xE000ED28 as *const u32) >> 8) & 0x10 == 0x10 {
-        asm!(
-        "add sp, sp, #1000" ::: );
+        asm!("mov sp, r0" :: "{r0}"((_estack as *const ()) as u32) : );
         panic!("kernel stack overflow.");
     }
 
