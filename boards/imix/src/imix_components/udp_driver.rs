@@ -32,6 +32,8 @@ use capsules::net::udp::udp_recv::UDPReceiver;
 use capsules::net::udp::udp_send::{MuxUdpSender, UDPSendStruct, UDPSender};
 use capsules::virtual_alarm::VirtualMuxAlarm;
 use kernel::{create_capability, static_init};
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMode};
+
 
 use kernel;
 use kernel::capabilities;
@@ -52,6 +54,7 @@ pub struct UDPDriverComponent {
     udp_recv_mux: &'static MuxUdpReceiver<'static>,
     port_table: &'static UdpPortManager,
     interface_list: &'static [IPAddr],
+    net_cap: NetworkCapability<NeutralMode>,
 }
 
 impl UDPDriverComponent {
@@ -64,6 +67,7 @@ impl UDPDriverComponent {
         udp_recv_mux: &'static MuxUdpReceiver<'static>,
         port_table: &'static UdpPortManager,
         interface_list: &'static [IPAddr],
+        net_cap: NetworkCapability<NeutralMode>,
     ) -> UDPDriverComponent {
         UDPDriverComponent {
             board_kernel: board_kernel,
@@ -71,6 +75,7 @@ impl UDPDriverComponent {
             udp_recv_mux: udp_recv_mux,
             port_table: port_table,
             interface_list: interface_list,
+            net_cap: net_cap,
         }
     }
 }
@@ -107,6 +112,7 @@ impl Component for UDPDriverComponent {
                 self.port_table,
                 kernel::common::leasable_buffer::LeasableBuffer::new(&mut DRIVER_BUF),
                 &DRIVER_CAP,
+                self.net_cap,
             )
         );
         udp_send.set_client(udp_driver);

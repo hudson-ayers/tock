@@ -13,10 +13,12 @@ use capsules::net::udp::udp_send::{MuxUdpSender, UDPSendStruct, UDPSender};
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 
 use capsules::net::udp::udp_port_table::UdpPortManager;
-use kernel::common::cells::TakeCell;
+use kernel::common::cells::{TakeCell, MapCell};
 use kernel::component::Component;
 use kernel::hil::time::Alarm;
 use kernel::static_init;
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMode};
+
 
 pub struct MockUDPComponent2 {
     // TODO: consider putting bound_port_table in a TakeCell
@@ -30,6 +32,7 @@ pub struct MockUDPComponent2 {
     udp_payload: TakeCell<'static, [u8]>,
     id: u16,
     dst_port: u16,
+    net_cap: NetworkCapability<NeutralMode>,
 }
 
 impl MockUDPComponent2 {
@@ -44,6 +47,8 @@ impl MockUDPComponent2 {
         udp_payload: &'static mut [u8],
         id: u16,
         dst_port: u16,
+        net_cap: NetworkCapability<NeutralMode>,
+
     ) -> MockUDPComponent2 {
         MockUDPComponent2 {
             udp_send_mux: udp_send_mux,
@@ -53,6 +58,8 @@ impl MockUDPComponent2 {
             udp_payload: TakeCell::new(udp_payload),
             id: id,
             dst_port: dst_port,
+            net_cap: net_cap,
+
         }
     }
 }
@@ -95,6 +102,7 @@ impl Component for MockUDPComponent2 {
                     self.udp_payload.take().expect("missing payload")
                 ),
                 self.dst_port,
+                self.net_cap,
             )
         );
         udp_send.set_client(mock_udp);

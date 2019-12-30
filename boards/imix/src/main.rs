@@ -25,6 +25,8 @@ use kernel::hil::radio::{RadioConfig, RadioData};
 use kernel::hil::Controller;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, debug_gpio, static_init};
+use kernel::network_capabilities::*;
+
 
 use components::alarm::AlarmDriverComponent;
 use components::console::ConsoleComponent;
@@ -158,6 +160,11 @@ struct Imix {
 static mut RF233_BUF: [u8; radio::MAX_BUF_SIZE] = [0x00; radio::MAX_BUF_SIZE];
 static mut RF233_REG_WRITE: [u8; 2] = [0x00; 2];
 static mut RF233_REG_READ: [u8; 2] = [0x00; 2];
+
+struct UdpVis;
+unsafe impl UdpVisCap for UdpVis {}
+static mut udp_vis_cap: UdpVis = UdpVis;
+
 
 impl kernel::Platform for Imix {
     fn with_driver<F, R>(&self, driver_num: usize, f: F) -> R
@@ -410,6 +417,11 @@ pub unsafe fn reset_handler() {
         ]
     );
 
+    let udp_cap = unsafe {UdpCapability::new(PortRange::Any, PortRange::Any)};
+    let ip_cap = unsafe {IpCapability::new(AddrRange::Any)};
+    let net_cap = unsafe {NetworkCapability::<NeutralMode>::new(udp_cap, ip_cap)};
+    // TODO: use create_capability! macro
+
     let (udp_send_mux, udp_recv_mux, udp_port_table) = UDPMuxComponent::new(
         mux_mac,
         DEFAULT_CTX_PREFIX_LEN,
@@ -419,6 +431,8 @@ pub unsafe fn reset_handler() {
         //MacAddress::Short(49138), //comment in for dual rx test only
         local_ip_ifaces,
         mux_alarm,
+        net_cap,
+        &udp_vis_cap,
     )
     .finalize(());
 
@@ -429,6 +443,7 @@ pub unsafe fn reset_handler() {
         udp_recv_mux,
         udp_port_table,
         local_ip_ifaces,
+        net_cap,
     )
     .finalize(());
 

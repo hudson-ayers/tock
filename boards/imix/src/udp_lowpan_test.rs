@@ -124,12 +124,15 @@ use capsules::net::udp::udp_send::MuxUdpSender;
 use capsules::test::udp::MockUdp;
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use core::cell::Cell;
+use kernel::common::cells::{MapCell};
 use kernel::component::Component;
 use kernel::debug;
 use kernel::hil::time::Frequency;
 use kernel::hil::time::{self, Alarm};
 use kernel::static_init;
 use kernel::ReturnCode;
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMode};
+
 
 pub const TEST_DELAY_MS: u32 = 2000;
 pub const TEST_LOOP: bool = false;
@@ -165,6 +168,8 @@ pub unsafe fn initialize_all(
     udp_recv_mux: &'static MuxUdpReceiver<'static>,
     port_table: &'static UdpPortManager,
     mux_alarm: &'static MuxAlarm<'static, sam4l::ast::Ast>,
+    net_cap1: NetworkCapability<NeutralMode>,
+    net_cap2: NetworkCapability<NeutralMode>,
 ) -> &'static LowpanTest<
     'static,
     capsules::virtual_alarm::VirtualMuxAlarm<'static, sam4l::ast::Ast<'static>>,
@@ -177,6 +182,8 @@ pub unsafe fn initialize_all(
         &mut UDP_PAYLOAD1,
         1, //id
         3, //dst_port
+        net_cap1,
+
     )
     .finalize(());
 
@@ -188,6 +195,7 @@ pub unsafe fn initialize_all(
         &mut UDP_PAYLOAD2,
         2, //id
         4, //dst_port
+        net_cap2,
     )
     .finalize(());
 
@@ -200,7 +208,7 @@ pub unsafe fn initialize_all(
             ),
             port_table,
             mock_udp1,
-            mock_udp2
+            mock_udp2,
         )
     );
 
