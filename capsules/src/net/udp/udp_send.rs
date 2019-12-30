@@ -27,35 +27,61 @@ use kernel::common::leasable_buffer::LeasableBuffer;
 use kernel::common::{List, ListLink, ListNode};
 use kernel::debug;
 use kernel::ReturnCode;
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode,
+    NeutralMode, UdpVisCap};
+
 
 pub struct MuxUdpSender<'a, T: IP6Sender<'a>> {
     sender_list: List<'a, UDPSendStruct<'a, T>>,
     ip_sender: &'a dyn IP6Sender<'a>,
+    net_cap: NetworkCapability<NeutralMode>,
+    udp_vis: &'static UdpVisCap,
 }
 
 impl<T: IP6Sender<'a>> MuxUdpSender<'a, T> {
-    pub fn new(ip6_sender: &'a dyn IP6Sender<'a>) -> MuxUdpSender<'a, T> {
+    pub fn new(ip6_sender: &'a dyn IP6Sender<'a>,
+        net_cap: NetworkCapability<NeutralMode>,
+        udp_vis: &'static UdpVisCap) -> MuxUdpSender<'a, T> {
         // similar to UdpSendStruct new()
         MuxUdpSender {
             sender_list: List::new(),
             ip_sender: ip6_sender,
+            net_cap: net_cap,
+            udp_vis: udp_vis
+            // TODO: share visibility cap
         }
     }
 
     fn send_to(
         &self,
         dest: IPAddr,
-        transport_header: TransportHeader,
+        transport_header: TransportHeader, // Why not UDPHeader?
         caller: &'a UDPSendStruct<'a, T>,
+        net_cap: NetworkCapability<NeutralMode>, // TODO: should the MuxUdpSender use it's own net_cap?
     ) -> ReturnCode {
         // Add this sender to the tail of the sender_list
+        // TODO: check the capability here. Need to check transport header
+        let valid_header = match transport_header {
+            TransportHeader::UDP(udp_header) => {
+                let udp_cap = net_cap.into_udp_cap(self.udp_vis);
+                udp_cap.get_remote_ports().is_port_valid(udp_header.get_dst_port())
+                && udp_cap.get_local_ports().is_port_valid(udp_header.get_src_port())
+            }
+            _ => false
+        };
+        if !valid_header {
+            debug!("Network capabilities are not satisfied");
+            return ReturnCode::FAIL;
+        }
+
         let list_empty = self.sender_list.head().is_none();
         self.add_client(caller);
         let mut ret = ReturnCode::SUCCESS;
         if list_empty {
             ret = match caller.tx_buffer.take() {
                 Some(buf) => {
-                    let ret = self.ip_sender.send_to(dest, transport_header, &buf);
+                    let ret = self.ip_sender.send_to(dest, transport_header,
+                        &buf, net_cap);
                     caller.tx_buffer.replace(buf); //Replace buffer as soon as sent.
                     ret
                 }
@@ -103,7 +129,8 @@ impl<T: IP6Sender<'a>> IP6SendClient for MuxUdpSender<'a, T> {
                         Some(th) => {
                             let ret = self
                                 .ip_sender
-                                .send_to(next_sender.next_dest.get(), th, &buf);
+                                .send_to(next_sender.next_dest.get(), th, &buf,
+                                    self.net_cap);
                             next_sender.tx_buffer.replace(buf);
                             if ret != ReturnCode::SUCCESS {
                                 debug!("IP send_to failed: {:?}", ret);
@@ -169,6 +196,7 @@ pub trait UDPSender<'a> {
         dst_port: u16,
         //src_port: u16,
         buf: LeasableBuffer<'static, u8>,
+        net_cap: NetworkCapability<NeutralMode>,
     ) -> Result<(), LeasableBuffer<'static, u8>>;
 
     /// This function is identical to `send_to()` except that it takes in
@@ -191,6 +219,7 @@ pub trait UDPSender<'a> {
         src_port: u16,
         buf: LeasableBuffer<'static, u8>,
         driver_send_cap: &dyn UdpDriverCapability,
+        net_cap: NetworkCapability<NeutralMode>,
     ) -> Result<(), LeasableBuffer<'static, u8>>;
 
     /// This function constructs an IP packet from the completed `UDPHeader`
@@ -209,6 +238,7 @@ pub trait UDPSender<'a> {
         dest: IPAddr,
         udp_header: UDPHeader,
         buf: LeasableBuffer<'static, u8>,
+        net_cap: NetworkCapability<NeutralMode>,
     ) -> Result<(), LeasableBuffer<'static, u8>>;
 
     fn get_binding(&self) -> Option<UdpPortBindingTx>;
@@ -249,6 +279,7 @@ impl<T: IP6Sender<'a>> UDPSender<'a> for UDPSendStruct<'a, T> {
         dest: IPAddr,
         dst_port: u16,
         buf: LeasableBuffer<'static, u8>,
+        net_cap: NetworkCapability<NeutralMode>,
     ) -> Result<(), LeasableBuffer<'static, u8>> {
         let mut udp_header = UDPHeader::new();
         udp_header.set_dst_port(dst_port);
@@ -259,7 +290,7 @@ impl<T: IP6Sender<'a>> UDPSender<'a> for UDPSendStruct<'a, T> {
                 } else {
                     udp_header.set_src_port(binding.get_port());
                     self.binding.replace(binding);
-                    self.send(dest, udp_header, buf)
+                    self.send(dest, udp_header, buf, net_cap)
                 }
             }
             None => Err(buf),
@@ -273,11 +304,13 @@ impl<T: IP6Sender<'a>> UDPSender<'a> for UDPSendStruct<'a, T> {
         src_port: u16,
         buf: LeasableBuffer<'static, u8>,
         _driver_send_cap: &dyn UdpDriverCapability,
+        net_cap: NetworkCapability<NeutralMode>, // TODO: need this here?
     ) -> Result<(), LeasableBuffer<'static, u8>> {
         let mut udp_header = UDPHeader::new();
         udp_header.set_dst_port(dst_port);
         udp_header.set_src_port(src_port);
-        self.send(dest, udp_header, buf)
+        // 
+        self.send(dest, udp_header, buf, net_cap)
     }
 
     fn send(
@@ -285,13 +318,14 @@ impl<T: IP6Sender<'a>> UDPSender<'a> for UDPSendStruct<'a, T> {
         dest: IPAddr,
         mut udp_header: UDPHeader,
         buf: LeasableBuffer<'static, u8>,
+        net_cap: NetworkCapability<NeutralMode>,
     ) -> Result<(), LeasableBuffer<'static, u8>> {
         udp_header.set_len((buf.len() + udp_header.get_hdr_size()) as u16);
         let transport_header = TransportHeader::UDP(udp_header);
         self.tx_buffer.replace(buf);
         self.next_dest.replace(dest);
         self.next_th.replace(transport_header); // th = transport header
-        match self.udp_mux_sender.send_to(dest, transport_header, &self) {
+        match self.udp_mux_sender.send_to(dest, transport_header, &self, net_cap) {
             ReturnCode::SUCCESS => Ok(()),
             _ => Err(self.tx_buffer.take().unwrap()),
         }

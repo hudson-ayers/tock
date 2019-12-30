@@ -27,6 +27,8 @@ use kernel::common::leasable_buffer::LeasableBuffer;
 use kernel::debug;
 use kernel::hil::time::{self, Frequency};
 use kernel::ReturnCode;
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMode};
+
 
 /// This trait must be implemented by upper layers in order to receive
 /// the `send_done` callback when a transmission has completed. The upper
@@ -83,6 +85,7 @@ pub trait IP6Sender<'a> {
         dst: IPAddr,
         transport_header: TransportHeader,
         payload: &LeasableBuffer<'static, u8>,
+        net_cap: NetworkCapability<NeutralMode>,
     ) -> ReturnCode;
 }
 
@@ -127,7 +130,9 @@ impl<A: time::Alarm<'a>> IP6Sender<'a> for IP6SendStruct<'a, A> {
         dst: IPAddr,
         transport_header: TransportHeader,
         payload: &LeasableBuffer<'static, u8>,
+        net_cap: NetworkCapability<NeutralMode>,
     ) -> ReturnCode {
+        // TODO: check the net_cap here. Is this code trusted here? Should it be?
         self.sixlowpan.init(
             self.src_mac_addr,
             self.dst_mac_addr,

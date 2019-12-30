@@ -14,6 +14,7 @@
 #![no_std]
 
 pub mod capabilities;
+pub mod network_capabilities;
 pub mod common;
 pub mod component;
 pub mod debug;

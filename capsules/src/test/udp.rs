@@ -14,6 +14,7 @@ use kernel::common::cells::MapCell;
 use kernel::common::leasable_buffer::LeasableBuffer;
 use kernel::hil::time::{self, Alarm, Frequency};
 use kernel::{debug, ReturnCode};
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMode};
 
 pub const DST_ADDR: IPAddr = IPAddr([
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e,
@@ -34,6 +35,8 @@ pub struct MockUdp<'a, A: Alarm<'a>> {
     src_port: Cell<u16>,
     dst_port: Cell<u16>,
     send_loop: Cell<bool>,
+    // TODO: cell type below? need to worry about lifetime issues?
+    net_cap: NetworkCapability<NeutralMode>,
 }
 
 impl<'a, A: Alarm<'a>> MockUdp<'a, A> {
@@ -45,6 +48,7 @@ impl<'a, A: Alarm<'a>> MockUdp<'a, A> {
         port_table: &'static UdpPortManager,
         udp_dgram: LeasableBuffer<'static, u8>,
         dst_port: u16,
+        net_cap: NetworkCapability<NeutralMode>,
     ) -> MockUdp<'a, A> {
         MockUdp {
             id: id,
@@ -56,6 +60,7 @@ impl<'a, A: Alarm<'a>> MockUdp<'a, A> {
             src_port: Cell::new(0), // invalid initial value
             dst_port: Cell::new(dst_port),
             send_loop: Cell::new(false),
+            net_cap: net_cap,
         }
     }
 
@@ -132,6 +137,7 @@ impl<'a, A: Alarm<'a>> MockUdp<'a, A> {
     }
 
     // Sends a packet containing a single 2 byte number.
+    // TODO: need to pass along the capability
     pub fn send(&self, value: u16) -> ReturnCode {
         match self.udp_dgram.take() {
             Some(mut dgram) => {
@@ -140,7 +146,7 @@ impl<'a, A: Alarm<'a>> MockUdp<'a, A> {
                 dgram.slice(0..2);
                 match self
                     .udp_sender
-                    .send_to(DST_ADDR, self.dst_port.get(), dgram)
+                    .send_to(DST_ADDR, self.dst_port.get(), dgram, self.net_cap)
                 {
                     Ok(_) => ReturnCode::SUCCESS,
                     Err(mut buf) => {
@@ -161,6 +167,8 @@ impl<'a, A: Alarm<'a>> MockUdp<'a, A> {
 impl<'a, A: Alarm<'a>> time::AlarmClient for MockUdp<'a, A> {
     fn fired(&self) {
         if self.send_loop.get() {
+            // TODO: add binding stuff here
+            // Ideally send shoudld accept a binding
             self.send(self.id);
         }
     }
