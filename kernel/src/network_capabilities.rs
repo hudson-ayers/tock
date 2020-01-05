@@ -116,7 +116,7 @@ pub unsafe trait UdpVisCap {}
 
 pub unsafe trait IpVisCap {}
 // TODO: remove copy eventually!!!!
-#[derive(Clone, Copy, PartialEq)]
+#[derive(PartialEq)]
 pub struct NetworkCapability<M> {
     // can potentially add more
     udp_cap: UdpCapability,

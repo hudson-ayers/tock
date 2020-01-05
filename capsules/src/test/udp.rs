@@ -10,7 +10,7 @@ use crate::net::udp::udp_port_table::UdpPortManager;
 use crate::net::udp::udp_recv::{UDPReceiver, UDPRecvClient};
 use crate::net::udp::udp_send::{UDPSendClient, UDPSender};
 use core::cell::Cell;
-use kernel::common::cells::MapCell;
+use kernel::common::cells::{MapCell, TakeCell};
 use kernel::common::leasable_buffer::LeasableBuffer;
 use kernel::hil::time::{self, Alarm, Frequency};
 use kernel::{debug, ReturnCode};
@@ -36,7 +36,7 @@ pub struct MockUdp<'a, A: Alarm<'a>> {
     dst_port: Cell<u16>,
     send_loop: Cell<bool>,
     // TODO: cell type below? need to worry about lifetime issues?
-    net_cap: NetworkCapability<NeutralMode>,
+    net_cap: MapCell::<NetworkCapability<NeutralMode>>,
 }
 
 impl<'a, A: Alarm<'a>> MockUdp<'a, A> {
@@ -60,7 +60,7 @@ impl<'a, A: Alarm<'a>> MockUdp<'a, A> {
             src_port: Cell::new(0), // invalid initial value
             dst_port: Cell::new(dst_port),
             send_loop: Cell::new(false),
-            net_cap: net_cap,
+            net_cap: MapCell::new(net_cap),
         }
     }
 
@@ -144,10 +144,10 @@ impl<'a, A: Alarm<'a>> MockUdp<'a, A> {
                 dgram[0] = (value >> 8) as u8;
                 dgram[1] = (value & 0x00ff) as u8;
                 dgram.slice(0..2);
-                match self
-                    .udp_sender
-                    .send_to(DST_ADDR, self.dst_port.get(), dgram, self.net_cap)
-                {
+                let ncap = self.net_cap.take().unwrap();
+                let send_result = self.udp_sender.send_to(DST_ADDR,
+                        self.dst_port.get(), dgram, ncap);
+                match send_result {
                     Ok(_) => ReturnCode::SUCCESS,
                     Err(mut buf) => {
                         buf.reset();

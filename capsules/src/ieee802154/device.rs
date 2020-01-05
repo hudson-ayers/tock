@@ -14,6 +14,7 @@
 use crate::ieee802154::framer::Frame;
 use crate::net::ieee802154::{Header, KeyId, MacAddress, PanID, SecurityLevel};
 use kernel::ReturnCode;
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMode};
 
 pub trait MacDevice<'a> {
     /// Sets the transmission client of this MAC device
@@ -88,7 +89,9 @@ pub trait TxClient {
     /// - `acked`: Whether the transmission was acknowledged.
     /// - `result`: This is `ReturnCode::SUCCESS` if the frame was transmitted,
     /// otherwise an error occured in the transmission pipeline.
-    fn send_done(&self, spi_buf: &'static mut [u8], acked: bool, result: ReturnCode);
+    fn send_done(&self, spi_buf: &'static mut [u8], acked: bool,
+        result: ReturnCode, net_cap: NetworkCapability<NeutralMode>)
+        -> NetworkCapability<NeutralMode>;
 }
 
 /// Trait to be implemented by users of the IEEE 802.15.4 device that wish to

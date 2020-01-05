@@ -21,7 +21,8 @@ use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMo
 pub trait ICMP6SendClient {
     /// A client callback invoked after an ICMP6Sender has completed sending
     /// a requested packet.
-    fn send_done(&self, result: ReturnCode);
+    fn send_done(&self, result: ReturnCode,
+        net_cap: NetworkCapability<NeutralMode>) -> NetworkCapability<NeutralMode>;
 }
 
 /// A trait that defines an interface for sending ICMPv6 packets.
@@ -92,7 +93,8 @@ impl<T: IP6Sender<'a>> ICMP6Sender<'a> for ICMP6SendStruct<'a, T> {
 impl<T: IP6Sender<'a>> IP6SendClient for ICMP6SendStruct<'a, T> {
     /// Forwards callback received from the `IP6Sender` to the
     /// `ICMP6SendClient`.
-    fn send_done(&self, result: ReturnCode) {
-        self.client.map(|client| client.send_done(result));
+    fn send_done(&self, result: ReturnCode, net_cap: NetworkCapability<NeutralMode>)
+        -> NetworkCapability<NeutralMode> {
+        self.client.map(|client| client.send_done(result, net_cap)).unwrap() // TODO: check return type
     }
 }

@@ -35,7 +35,8 @@ use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMo
 /// layer must then call `IP6Sender.set_client` in order to receive this
 /// callback.
 pub trait IP6SendClient {
-    fn send_done(&self, result: ReturnCode);
+    fn send_done(&self, result: ReturnCode,
+        net_cap: NetworkCapability<NeutralMode>) -> NetworkCapability<NeutralMode>;
 }
 
 /// This trait provides a basic IPv6 sending interface. It exposes basic
@@ -190,7 +191,8 @@ impl<A: time::Alarm<'a>> IP6SendStruct<'a, A> {
     }
 
     // Returns EBUSY if the tx_buf is not there
-    fn send_next_fragment(&self) -> ReturnCode {
+    fn send_next_fragment(&self, net_cap: NetworkCapability<NeutralMode>)
+        -> (ReturnCode, NetworkCapability<NeutralMode>) {
         // Originally send_complete() was called within the below closure.
         // However, this led to a race condition where when multiple apps transmitted
         // simultaneously, it was possible for send_complete to trigger another
@@ -228,15 +230,15 @@ impl<A: time::Alarm<'a>> IP6SendStruct<'a, A> {
             })
             .unwrap_or((ReturnCode::ENOMEM, false));
         if call_send_complete {
-            self.send_completed(ret);
-            return ReturnCode::SUCCESS;
+            self.send_completed(ret, net_cap);
+            return (ReturnCode::SUCCESS, NetworkCapability<NeutralMode>);
         }
         ret
     }
 
-    fn send_completed(&self, result: ReturnCode) {
+    fn send_completed(&self, result: ReturnCode, net_cap: NetworkCapability<NeutralMode>) {
         self.client.map(move |client| {
-            client.send_done(result);
+            client.send_done(result, net_cap);
         });
     }
 }
@@ -251,12 +253,13 @@ impl<A: time::Alarm<'a>> time::AlarmClient for IP6SendStruct<'a, A> {
 }
 
 impl<A: time::Alarm<'a>> TxClient for IP6SendStruct<'a, A> {
-    fn send_done(&self, tx_buf: &'static mut [u8], acked: bool, result: ReturnCode) {
+    fn send_done(&self, tx_buf: &'static mut [u8], acked: bool, result: ReturnCode,
+        net_cap: NetworkCapability<NeutralMode>) -> NetworkCapability<NeutralMode> {
         self.tx_buf.replace(tx_buf);
         if result != ReturnCode::SUCCESS {
             debug!("Send Failed: {:?}, acked: {}", result, acked);
             self.client.map(move |client| {
-                client.send_done(result);
+                client.send_done(result, net_cap)
             });
         } else {
             // Below code adds delay between fragments. Despite some efforts
@@ -270,6 +273,7 @@ impl<A: time::Alarm<'a>> TxClient for IP6SendStruct<'a, A> {
             let interval = (100000 as u32) * <A::Frequency>::frequency() / 1000000;
             let tics = self.alarm.now().wrapping_add(interval);
             self.alarm.set_alarm(tics);
+            net_cap
         }
     }
 }

@@ -32,6 +32,8 @@ use core::cell::Cell;
 use kernel::common::cells::{MapCell, OptionalCell};
 use kernel::common::{List, ListLink, ListNode};
 use kernel::ReturnCode;
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMode};
+
 
 /// IEE 802.15.4 MAC device muxer that keeps a list of MAC users and sequences
 /// any pending transmission requests. Any received frames from the underlying
@@ -43,7 +45,8 @@ pub struct MuxMac<'a> {
 }
 
 impl device::TxClient for MuxMac<'a> {
-    fn send_done(&self, spi_buf: &'static mut [u8], acked: bool, result: ReturnCode) {
+    fn send_done(&self, spi_buf: &'static mut [u8], acked: bool, result: ReturnCode,
+        net_cap: NetworkCapability<NeutralMode>) -> NetworkCapability<NeutralMode> {
         self.inflight.take().map(move |user| {
             user.send_done(spi_buf, acked, result);
         });

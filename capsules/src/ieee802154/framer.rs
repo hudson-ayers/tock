@@ -81,6 +81,8 @@ use kernel::common::cells::{MapCell, OptionalCell};
 use kernel::hil::radio;
 use kernel::hil::symmetric_encryption::{CCMClient, AES128CCM};
 use kernel::ReturnCode;
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMode};
+
 
 /// A `Frame` wraps a static mutable byte slice and keeps just enough
 /// information about its header contents to expose a restricted interface for
@@ -786,7 +788,8 @@ impl<M: Mac, A: AES128CCM<'a>> MacDevice<'a> for Framer<'a, M, A> {
 }
 
 impl<M: Mac, A: AES128CCM<'a>> radio::TxClient for Framer<'a, M, A> {
-    fn send_done(&self, buf: &'static mut [u8], acked: bool, result: ReturnCode) {
+    fn send_done(&self, buf: &'static mut [u8], acked: bool, result: ReturnCode,
+        net_cap: NetworkCapability<NeutralMode>) {
         self.data_sequence.set(self.data_sequence.get() + 1);
         self.tx_client.map(move |client| {
             client.send_done(buf, acked, result);

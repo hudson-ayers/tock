@@ -34,7 +34,6 @@ use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode,
 pub struct MuxUdpSender<'a, T: IP6Sender<'a>> {
     sender_list: List<'a, UDPSendStruct<'a, T>>,
     ip_sender: &'a dyn IP6Sender<'a>,
-    net_cap: NetworkCapability<NeutralMode>,
     udp_vis: &'static UdpVisCap,
 }
 
@@ -46,9 +45,7 @@ impl<T: IP6Sender<'a>> MuxUdpSender<'a, T> {
         MuxUdpSender {
             sender_list: List::new(),
             ip_sender: ip6_sender,
-            net_cap: net_cap,
             udp_vis: udp_vis
-            // TODO: share visibility cap
         }
     }
 
@@ -103,7 +100,8 @@ impl<T: IP6Sender<'a>> MuxUdpSender<'a, T> {
 /// and is necessary to receive callbacks from the lower (IP) layer. When
 /// the UDP layer receives this callback, it forwards it to the `UDPSendClient`.
 impl<T: IP6Sender<'a>> IP6SendClient for MuxUdpSender<'a, T> {
-    fn send_done(&self, result: ReturnCode) {
+    fn send_done(&self, result: ReturnCode, net_cap: NetworkCapability<NeutralMode>)
+    -> NetworkCapability<NeutralMode> {
         let last_sender = self.sender_list.pop_head();
         let next_sender_option = self.sender_list.head(); // must check here, because udp driver
                                                           // could queue addl. sends in response to
@@ -130,7 +128,7 @@ impl<T: IP6Sender<'a>> IP6SendClient for MuxUdpSender<'a, T> {
                             let ret = self
                                 .ip_sender
                                 .send_to(next_sender.next_dest.get(), th, &buf,
-                                    self.net_cap);
+                                    net_cap);
                             next_sender.tx_buffer.replace(buf);
                             if ret != ReturnCode::SUCCESS {
                                 debug!("IP send_to failed: {:?}", ret);

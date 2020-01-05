@@ -11,6 +11,8 @@ use core::cell::Cell;
 use core::cmp::min;
 use kernel::common::cells::{MapCell, OptionalCell, TakeCell};
 use kernel::{AppId, AppSlice, Callback, Driver, Grant, ReturnCode, Shared};
+use kernel::network_capabilities::{NetworkCapability, UdpMode, IpMode, NeutralMode};
+
 
 const MAX_NEIGHBORS: usize = 4;
 const MAX_KEYS: usize = 4;
@@ -799,7 +801,8 @@ impl Driver for RadioDriver<'a> {
 }
 
 impl device::TxClient for RadioDriver<'a> {
-    fn send_done(&self, spi_buf: &'static mut [u8], acked: bool, result: ReturnCode) {
+    fn send_done(&self, spi_buf: &'static mut [u8], acked: bool, result: ReturnCode,
+        net_cap: NetworkCapability<NeutralMode>) -> NetworkCapability<NeutralMode> {
         self.kernel_tx.replace(spi_buf);
         self.current_app.take().map(|appid| {
             let _ = self.apps.enter(appid, |app, _| {
