@@ -69,6 +69,7 @@ pub fn load_processes<C: Chip>(
             app_memory_size -= memory_offset;
         }
     }
+    kernel.process_list_changed();
 }
 
 /// This trait is implemented by process structs.
@@ -220,6 +221,9 @@ pub trait ProcessType {
     unsafe fn fault_fmt(&self, writer: &mut dyn Write);
     unsafe fn process_detail_fmt(&self, writer: &mut dyn Write);
 
+    fn set_last_us_used(&self, us: u32);
+    fn get_last_us_used(&self) -> u32;
+
     // debug
 
     /// Returns how many syscalls this app has called.
@@ -360,6 +364,11 @@ pub struct FunctionCall {
     pub pc: usize,
 }
 
+/// Stores state relevant to the scheduler for each process
+struct SchedulerState {
+    us_used_last_exec: Cell<u32>,
+}
+
 /// State for helping with debugging apps.
 ///
 /// These pointers and counters are not strictly required for kernel operation,
@@ -486,6 +495,9 @@ pub struct Process<'a, C: 'static + Chip> {
 
     /// Name of the app.
     process_name: &'static str,
+
+    /// Info needed by the scheduler
+    scheduler_state: SchedulerState,
 
     /// Values kept so that we can print useful debug messages when apps fault.
     debug: MapCell<ProcessDebug>,
@@ -842,6 +854,14 @@ impl<C: Chip> ProcessType for Process<'a, C> {
 
     fn get_process_name(&self) -> &'static str {
         self.process_name
+    }
+
+    fn set_last_us_used(&self, us: u32) {
+        self.scheduler_state.us_used_last_exec.set(us);
+    }
+
+    fn get_last_us_used(&self) -> u32 {
+        self.scheduler_state.us_used_last_exec.get()
     }
 
     unsafe fn set_syscall_return_value(&self, return_value: isize) {
