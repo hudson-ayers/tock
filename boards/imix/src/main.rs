@@ -17,13 +17,19 @@ use capsules::virtual_i2c::MuxI2C;
 use capsules::virtual_spi::{MuxSpiMaster, VirtualSpiMasterDevice};
 use kernel::capabilities;
 use kernel::common::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferredCallClientState};
+use kernel::common::List;
 use kernel::component::Component;
 use kernel::hil::radio;
 #[allow(unused_imports)]
 use kernel::hil::radio::{RadioConfig, RadioData};
 use kernel::hil::Controller;
+use kernel::Scheduler;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, debug_gpio, static_init};
+use kernel::{
+    MLFQProcessNode, MLFQSched, PrioritySched, ProcessArray, ProcessCollection, ProcessMultiQueues,
+    ProcessQueue, RRProcessNode, RoundRobinSched,
+};
 
 use components;
 use components::alarm::{AlarmDriverComponent, AlarmMuxComponent};
@@ -104,14 +110,15 @@ const FAULT_RESPONSE: kernel::procs::FaultResponse = kernel::procs::FaultRespons
 #[link_section = ".app_memory"]
 static mut APP_MEMORY: [u8; 32768] = [0; 32768];
 
-static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] =
-    [None; NUM_PROCS];
 static mut CHIP: Option<&'static sam4l::chip::Sam4l> = None;
 
 /// Dummy buffer that causes the linker to reserve enough space for the stack.
 #[no_mangle]
 #[link_section = ".stack_buffer"]
 pub static mut STACK_MEMORY: [u8; 0x2000] = [0; 0x2000];
+
+/// Pointer to Process Container (initialized via static_init)
+static mut PROCESS_COLLECTION_PTR: Option<*const dyn ProcessCollection> = None;
 
 struct Imix {
     pconsole: &'static capsules::process_console::ProcessConsole<
@@ -294,7 +301,7 @@ pub unsafe fn reset_handler() {
         trng: true,
     });
 
-    let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new(&PROCESSES));
+    let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new());
 
     let dynamic_deferred_call_clients =
         static_init!([DynamicDeferredCallClientState; 2], Default::default());
@@ -507,15 +514,66 @@ pub unsafe fn reset_handler() {
         /// Beginning of the ROM region containing app images.
         static _sapps: u8;
     }
+
+    type SchedType = MLFQSched;
+    // MLFQ init
+    let processes: [&'static mut List<'static, MLFQProcessNode>; ProcessMultiQueues::NUM_QUEUES] = [
+        static_init!(List<'static, MLFQProcessNode>, List::new()),
+        static_init!(List<'static, MLFQProcessNode>, List::new()),
+        static_init!(List<'static, MLFQProcessNode>, List::new()),
+    ];
+
+    // TODO: Put below in a macro
+    let proc0 = static_init!(MLFQProcessNode, MLFQProcessNode::new());
+    let proc1 = static_init!(MLFQProcessNode, MLFQProcessNode::new());
+    let proc2 = static_init!(MLFQProcessNode, MLFQProcessNode::new());
+    let proc3 = static_init!(MLFQProcessNode, MLFQProcessNode::new());
+    processes[0].push_head(proc0);
+    processes[0].push_head(proc1);
+    processes[0].push_head(proc2);
+    processes[0].push_head(proc3);
+    /*
+     // Round Robin init
+    let processes = static_init!(List<'static, RRProcessNode>, List::new());
+    // TODO: Put below in a macro
+    let proc0 = static_init!(RRProcessNode, RRProcessNode::new());
+    let proc1 = static_init!(RRProcessNode, RRProcessNode::new());
+    let proc2 = static_init!(RRProcessNode, RRProcessNode::new());
+    let proc3 = static_init!(RRProcessNode, RRProcessNode::new());
+    processes.push_head(proc0);
+    processes.push_head(proc1);
+    processes.push_head(proc2);
+    processes.push_head(proc3);
+    */
+    /*
+    // Priority Init
+    let processes = static_init!(
+        [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS],
+        Default::default()
+    );
+    */
+    let process_collection = static_init!(
+        <SchedType as Scheduler>::Collection,
+        <SchedType as Scheduler>::Collection::new(processes)
+    );
+
+    PROCESS_COLLECTION_PTR = Some(process_collection);
+
     kernel::procs::load_processes(
         board_kernel,
         chip,
         &_sapps as *const u8,
         &mut APP_MEMORY,
-        &mut PROCESSES,
+        process_collection,
         FAULT_RESPONSE,
         &process_mgmt_cap,
     );
+    board_kernel.set_proc_collection(process_collection);
 
-    board_kernel.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);
+    let sched_alarm = static_init!(
+        capsules::virtual_alarm::VirtualMuxAlarm<'static, sam4l::ast::Ast<'static>>,
+        capsules::virtual_alarm::VirtualMuxAlarm::new(mux_alarm)
+    );
+    let scheduler = static_init!(SchedType, SchedType::new(board_kernel, process_collection));
+    scheduler.kernel_loop(&imix, chip, Some(&imix.ipc), sched_alarm, &main_cap);
 }

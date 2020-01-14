@@ -16,6 +16,7 @@ use crate::platform::mpu::{self, MPU};
 use crate::platform::Chip;
 use crate::returncode::ReturnCode;
 use crate::sched::Kernel;
+use crate::sched::ProcessCollection;
 use crate::syscall::{self, Syscall, UserspaceKernelBoundary};
 use crate::tbfheader;
 use core::cmp::max;
@@ -35,7 +36,8 @@ pub fn load_processes<C: Chip>(
     chip: &'static C,
     start_of_flash: *const u8,
     app_memory: &mut [u8],
-    procs: &'static mut [Option<&'static dyn ProcessType>],
+    //procs: &'static mut [Option<&'static dyn ProcessType>],
+    procs: &mut dyn ProcessCollection,
     fault_response: FaultResponse,
     _capability: &dyn ProcessManagementCapability,
 ) {
@@ -63,7 +65,8 @@ pub fn load_processes<C: Chip>(
                     break;
                 }
             } else {
-                procs[i] = process;
+                procs.load_process_with_id(process, i);
+                //procs[i] = process;
             }
 
             apps_in_flash_ptr = apps_in_flash_ptr.add(flash_offset);
@@ -86,6 +89,9 @@ pub trait ProcessType {
     /// and `false` otherwise. This is represented as a simple `bool` because
     /// this is passed to the capsule that tried to schedule the `Task`.
     fn enqueue_task(&self, task: Task) -> bool;
+
+    /// Returns whether this process is ready to execute
+    fn ready(&self) -> bool;
 
     /// Remove the scheduled operation from the front of the queue and return it
     /// to be handled by the scheduler.
@@ -528,6 +534,11 @@ impl<C: Chip> ProcessType for Process<'a, C> {
         }
 
         ret
+    }
+
+    fn ready(&self) -> bool {
+        self.tasks.map_or(false, |ring_buf| ring_buf.has_elements())
+            || self.state.get() == State::Running
     }
 
     fn remove_pending_callbacks(&self, callback_id: CallbackId) {

@@ -48,7 +48,7 @@ use crate::common::cells::{MapCell, TakeCell};
 use crate::common::queue::Queue;
 use crate::common::ring_buffer::RingBuffer;
 use crate::hil;
-use crate::process::ProcessType;
+use crate::sched::ProcessCollection;
 use crate::Chip;
 use crate::ReturnCode;
 
@@ -75,7 +75,8 @@ pub unsafe fn panic<L: hil::led::Led, W: Write + IoWrite, C: Chip>(
     writer: &mut W,
     panic_info: &PanicInfo,
     nop: &dyn Fn(),
-    processes: &'static [Option<&'static dyn ProcessType>],
+    //processes: &'static [Option<&'static dyn ProcessType>],
+    processes: Option<*const dyn ProcessCollection>,
     chip: &'static Option<&'static C>,
 ) -> ! {
     panic_begin(nop);
@@ -140,15 +141,35 @@ pub unsafe fn panic_cpu_state<W: Write, C: Chip>(
 ///
 /// **NOTE:** The supplied `writer` must be synchronous.
 pub unsafe fn panic_process_info<W: Write>(
-    procs: &'static [Option<&'static dyn ProcessType>],
+    procs: Option<*const dyn ProcessCollection>,
     writer: &mut W,
 ) {
     // print data about each process
     let _ = writer.write_fmt(format_args!("\r\n---| App Status |---\r\n"));
-    for idx in 0..procs.len() {
-        procs[idx].as_ref().map(|process| {
-            process.print_full_process(writer);
-        });
+    match procs {
+        Some(proc_collection) => {
+            //TODO: Remove unwrap
+            // ------unsafe-------
+            let proc_iter = proc_collection.as_ref().unwrap().iter();
+            // ------end unsafe-------
+            match proc_iter {
+                Some(iter) => {
+                    for proc in iter {
+                        proc.print_full_process(writer);
+                    }
+                }
+                None => {
+                    let _ = writer.write_fmt(format_args!(
+                "\r\nError: Could not find Process Iterator to print process panic info!\r\n"
+            ));
+                }
+            }
+        }
+        None => {
+            let _ = writer.write_fmt(format_args!(
+                "\r\nError: Could not find ProcessCollection to print process panic info! Probably panicked in boot sequence.\r\n"
+            ));
+        }
     }
 }
 

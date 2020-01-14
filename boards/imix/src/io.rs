@@ -8,7 +8,7 @@ use kernel::hil::uart::{self, Configure};
 use sam4l;
 
 use crate::CHIP;
-use crate::PROCESSES;
+use crate::PROCESS_COLLECTION_PTR;
 
 struct Writer {
     initialized: bool,
@@ -58,7 +58,7 @@ pub unsafe extern "C" fn panic_fmt(pi: &PanicInfo) -> ! {
         writer,
         pi,
         &cortexm4::support::nop,
-        &PROCESSES,
+        PROCESS_COLLECTION_PTR,
         &CHIP,
     )
 }
