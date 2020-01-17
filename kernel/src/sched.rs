@@ -22,6 +22,12 @@ const KERNEL_TICK_DURATION_US: u32 = 10000;
 /// Skip re-scheduling a process if its quanta is nearly exhausted
 const MIN_QUANTA_THRESHOLD_US: u32 = 500;
 
+#[derive(Copy, Clone)]
+enum Scheduler {
+    Priority,
+    RoundRobin { current: usize },
+}
+
 /// Main object for the kernel. Each board will need to create one.
 pub struct Kernel {
     /// How many "to-do" items exist at any given time. These include
@@ -38,6 +44,7 @@ pub struct Kernel {
     /// created and the data structures for grants have already been
     /// established.
     grants_finalized: Cell<bool>,
+    scheduler: Cell<Scheduler>,
 }
 
 impl Kernel {
@@ -47,6 +54,19 @@ impl Kernel {
             processes: processes,
             grant_counter: Cell::new(0),
             grants_finalized: Cell::new(false),
+            scheduler: Cell::new(Scheduler::Priority),
+        }
+    }
+
+    pub fn new_round_robin(
+        processes: &'static [Option<&'static dyn process::ProcessType>],
+    ) -> Kernel {
+        Kernel {
+            work: Cell::new(0),
+            processes: processes,
+            grant_counter: Cell::new(0),
+            grants_finalized: Cell::new(false),
+            scheduler: Cell::new(Scheduler::RoundRobin { current: 0 }),
         }
     }
 
@@ -212,15 +232,42 @@ impl Kernel {
             unsafe {
                 chip.service_pending_interrupts();
                 DynamicDeferredCall::call_global_instance_while(|| !chip.has_pending_interrupts());
-
-                for p in self.processes.iter() {
-                    p.map(|process| {
-                        self.do_process(platform, chip, process, ipc);
-                    });
-                    if chip.has_pending_interrupts()
-                        || DynamicDeferredCall::global_instance_calls_pending().unwrap_or(false)
-                    {
-                        break;
+                match self.scheduler.get() {
+                    Scheduler::Priority => {
+                        for p in self.processes.iter() {
+                            p.map(|process| {
+                                self.do_process(platform, chip, process, ipc);
+                            });
+                            if chip.has_pending_interrupts()
+                                || DynamicDeferredCall::global_instance_calls_pending()
+                                    .unwrap_or(false)
+                            {
+                                break;
+                            }
+                        }
+                    }
+                    Scheduler::RoundRobin { current } => {
+                        let mut next = current;
+                        loop {
+                            self.processes[next].map(|process| {
+                                self.do_process(platform, chip, process, ipc);
+                            });
+                            if next < self.processes.len() - 1 {
+                                next = next + 1;
+                            } else {
+                                next = 0;
+                            }
+                            self.scheduler.set(Scheduler::RoundRobin { current: next });
+                            if next == current {
+                                break;
+                            }
+                            if chip.has_pending_interrupts()
+                                || DynamicDeferredCall::global_instance_calls_pending()
+                                    .unwrap_or(false)
+                            {
+                                break;
+                            }
+                        }
                     }
                 }
 
