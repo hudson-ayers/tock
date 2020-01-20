@@ -19,14 +19,12 @@ use crate::returncode::ReturnCode;
 use crate::static_init;
 use crate::syscall::{ContextSwitchReason, Syscall};
 
-/// The time a process is permitted to run before being pre-empted
-const KERNEL_TICK_DURATION_US: u32 = 10000;
 /// Skip re-scheduling a process if its quanta is nearly exhausted
 const MIN_QUANTA_THRESHOLD_US: u32 = 500;
-
 trait Scheduler {
     /// Called by kernel loop to allow scheduler to choose next process to be run
-    fn schedule_next(&'static self) -> Option<usize>;
+    /// Also passes how long that process should be allowed to run until preemption
+    fn schedule_next(&'static self) -> Option<(usize, u32)>;
 
     /// Called if a process was given the chance to run (do_process() was called
     /// and not interrupted by a hardware interrupt. Yielded processes with tasks queued
@@ -38,6 +36,9 @@ trait Scheduler {
         us_used: u32,
     );
 
+    /// Called once apps have been loaded to inform the scheduler how many applications
+    /// are installed on the board. Currently the scheduler trait assumes apps are not
+    /// loaded after board initialization.
     fn set_num_procs(&'static self, num_procs: usize);
 }
 
@@ -45,6 +46,7 @@ struct RoundRobinSched {
     processes: &'static [Option<&'static dyn process::ProcessType>],
     num_procs_installed: Cell<usize>,
     next_up: Cell<usize>,
+    kernel_tick_duration_us: u32,
 }
 
 impl RoundRobinSched {
@@ -53,15 +55,16 @@ impl RoundRobinSched {
             processes: processes,
             num_procs_installed: Cell::new(0),
             next_up: Cell::new(0),
+            kernel_tick_duration_us: 10000,
         }
     }
 }
 
 impl Scheduler for RoundRobinSched {
-    fn schedule_next(&'static self) -> Option<usize> {
+    fn schedule_next(&'static self) -> Option<(usize, u32)> {
         if self.num_procs_installed.get() > 0 {
             //debug!("next up: {}", self.next_up.get());
-            Some(self.next_up.get())
+            Some((self.next_up.get(), self.kernel_tick_duration_us))
         } else {
             None
         }
@@ -93,6 +96,7 @@ struct RoundRobinForgivingSched {
     processes: &'static [Option<&'static dyn process::ProcessType>],
     num_procs_installed: Cell<usize>,
     next_up: Cell<usize>,
+    kernel_tick_duration_us: u32,
 }
 
 impl RoundRobinForgivingSched {
@@ -103,15 +107,16 @@ impl RoundRobinForgivingSched {
             processes: processes,
             num_procs_installed: Cell::new(0),
             next_up: Cell::new(0),
+            kernel_tick_duration_us: 10000,
         }
     }
 }
 
 impl Scheduler for RoundRobinForgivingSched {
-    fn schedule_next(&'static self) -> Option<usize> {
+    fn schedule_next(&'static self) -> Option<(usize, u32)> {
         if self.num_procs_installed.get() > 0 {
             //debug!("next up: {}", self.next_up.get());
-            Some(self.next_up.get())
+            Some((self.next_up.get(), self.kernel_tick_duration_us))
         } else {
             None
         }
@@ -125,7 +130,7 @@ impl Scheduler for RoundRobinForgivingSched {
         let last = self.next_up.get();
         match switch_reason {
             Some(ContextSwitchReason::Interrupted) => {
-                if us_used < KERNEL_TICK_DURATION_US - MIN_QUANTA_THRESHOLD_US {
+                if us_used < self.kernel_tick_duration_us - MIN_QUANTA_THRESHOLD_US {
                     //get to finish
                     return;
                 }
@@ -371,10 +376,16 @@ impl Kernel {
                 chip.service_pending_interrupts();
                 DynamicDeferredCall::call_global_instance_while(|| !chip.has_pending_interrupts());
 
-                while let Some(next_proc_idx) = self.scheduler.schedule_next() {
+                while let Some((next_proc_idx, timeslice_us)) = self.scheduler.schedule_next() {
                     self.processes[next_proc_idx].map(|process| {
-                        let (given_chance, switch_reason_opt) =
-                            self.do_process(platform, chip, process, ipc);
+                        let (given_chance, switch_reason_opt) = self.do_process(
+                            platform,
+                            chip,
+                            process,
+                            ipc,
+                            timeslice_us,
+                            MIN_QUANTA_THRESHOLD_US,
+                        );
                         if given_chance {
                             self.scheduler.scheduled(
                                 next_proc_idx,
@@ -409,11 +420,13 @@ impl Kernel {
         chip: &C,
         process: &dyn process::ProcessType,
         ipc: Option<&crate::ipc::IPC>,
+        proc_timeslice_us: u32,
+        min_quanta_threshold_us: u32,
     ) -> (bool, Option<ContextSwitchReason>) {
         let appid = process.appid();
         let systick = chip.systick();
         systick.reset();
-        systick.set_timer(KERNEL_TICK_DURATION_US);
+        systick.set_timer(proc_timeslice_us);
         systick.enable(false);
         let mut given_chance = false;
         let mut switch_reason_opt = None;
@@ -423,7 +436,7 @@ impl Kernel {
                 break;
             }
 
-            if systick.overflowed() || !systick.greater_than(MIN_QUANTA_THRESHOLD_US) {
+            if systick.overflowed() || !systick.greater_than(min_quanta_threshold_us) {
                 process.debug_timeslice_expired();
                 break;
             }
@@ -538,7 +551,7 @@ impl Kernel {
                             break;
                         }
                         Some(ContextSwitchReason::Interrupted) => {
-                            // break to handle other processes.
+                            // break to handle interrupt
                             break;
                         }
                         None => {
