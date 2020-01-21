@@ -5,7 +5,7 @@ use core::ptr::NonNull;
 
 use crate::callback::{Callback, CallbackId};
 use crate::capabilities;
-use crate::common::cells::NumericCellExt;
+use crate::common::cells::{NumericCellExt, OptionalCell};
 use crate::common::dynamic_deferred_call::DynamicDeferredCall;
 use crate::debug;
 use crate::grant::Grant;
@@ -21,60 +21,65 @@ use crate::syscall::{ContextSwitchReason, Syscall};
 
 /// Skip re-scheduling a process if its quanta is nearly exhausted
 const MIN_QUANTA_THRESHOLD_US: u32 = 500;
+
 trait Scheduler {
-    /// Called by kernel loop to allow scheduler to choose next process to be run
-    /// Also passes how long that process should be allowed to run until preemption
-    fn schedule_next(&'static self) -> Option<(usize, u32)>;
+    /// Called by kernel loop to allow scheduler to choose next process to be run.
+    /// This function is also responsible for determining when the kernel should
+    /// service interrupts - when the kernel should service interrupts, this function
+    /// returns `None`. Otherwise, it returns a tuple containing the index of the
+    /// next process to be run, and how long that process can run before being preempted.
+    /// interrupts_waiting is passed as a parameter rather than being calculated inside
+    /// the function to prevent the scheduler from having to hold a reference to this Chip.
+    fn schedule_next(&'static self, interrupts_waiting: bool) -> Option<(usize, u32)>;
 
     /// Called if a process was given the chance to run (do_process() was called
-    /// and not interrupted by a hardware interrupt. Yielded processes with tasks queued
-    /// are only marked as having been given a chance if those tasks get a chance to run)
-    fn scheduled(
-        &'static self,
-        idx: usize,
-        switch_reason: Option<ContextSwitchReason>,
-        us_used: u32,
-    );
+    /// and process was scheduled). Yielded processes with tasks queued
+    /// are only marked as having been given a chance if those tasks get a chance to run.
+    /// When process is scheduled, the ContextSwitchReason for this app returning
+    /// is also passed to allow the scheduler to make decision on the basis of this
+    /// if it so desires.
+    fn scheduled(&'static self, idx: usize, switch_reason: Option<ContextSwitchReason>);
 
     /// Called once apps have been loaded to inform the scheduler how many applications
     /// are installed on the board. Currently the scheduler trait assumes apps are not
     /// loaded after board initialization.
     fn set_num_procs(&'static self, num_procs: usize);
+
+    fn set_kernel_ref(&'static self, kernel: &'static Kernel);
 }
 
-struct RoundRobinSched {
-    processes: &'static [Option<&'static dyn process::ProcessType>],
+struct PrioritySched {
+    kernel: OptionalCell<&'static Kernel>,
     num_procs_installed: Cell<usize>,
     next_up: Cell<usize>,
-    kernel_tick_duration_us: u32,
 }
 
-impl RoundRobinSched {
-    fn new(processes: &'static [Option<&'static dyn process::ProcessType>]) -> RoundRobinSched {
-        RoundRobinSched {
-            processes: processes,
+impl PrioritySched {
+    const DEFAULT_TIMESLICE_US: u32 = 10000;
+    fn new() -> PrioritySched {
+        PrioritySched {
+            kernel: OptionalCell::empty(),
             num_procs_installed: Cell::new(0),
             next_up: Cell::new(0),
-            kernel_tick_duration_us: 10000,
         }
     }
 }
 
-impl Scheduler for RoundRobinSched {
-    fn schedule_next(&'static self) -> Option<(usize, u32)> {
-        if self.num_procs_installed.get() > 0 {
-            //debug!("next up: {}", self.next_up.get());
-            Some((self.next_up.get(), self.kernel_tick_duration_us))
-        } else {
+impl Scheduler for PrioritySched {
+    fn schedule_next(&'static self, interrupts_waiting: bool) -> Option<(usize, u32)> {
+        let should_break = interrupts_waiting
+            || unsafe { DynamicDeferredCall::global_instance_calls_pending().unwrap_or(false) }
+            || self.kernel.expect("sched fail").processes_blocked()
+            || self.num_procs_installed.get() == 0;
+        if should_break {
+            // don't schedule
+            self.next_up.set(0);
             None
+        } else {
+            Some((self.next_up.get(), Self::DEFAULT_TIMESLICE_US))
         }
     }
-    fn scheduled(
-        &'static self,
-        idx: usize,
-        _switch_reason: Option<ContextSwitchReason>,
-        _us_used: u32,
-    ) {
+    fn scheduled(&'static self, idx: usize, _switch_reason: Option<ContextSwitchReason>) {
         let last = self.next_up.get();
         if idx == last {
             if last < self.num_procs_installed.get() - 1 {
@@ -90,50 +95,122 @@ impl Scheduler for RoundRobinSched {
     fn set_num_procs(&'static self, num_procs: usize) {
         self.num_procs_installed.set(num_procs);
     }
+
+    fn set_kernel_ref(&'static self, kernel: &'static Kernel) {
+        self.kernel.set(kernel);
+    }
 }
 
-struct RoundRobinForgivingSched {
-    processes: &'static [Option<&'static dyn process::ProcessType>],
+struct RoundRobinSched {
+    kernel: OptionalCell<&'static Kernel>,
     num_procs_installed: Cell<usize>,
     next_up: Cell<usize>,
-    kernel_tick_duration_us: u32,
 }
 
-impl RoundRobinForgivingSched {
-    fn new(
-        processes: &'static [Option<&'static dyn process::ProcessType>],
-    ) -> RoundRobinForgivingSched {
-        RoundRobinForgivingSched {
-            processes: processes,
+impl RoundRobinSched {
+    const DEFAULT_TIMESLICE_US: u32 = 10000;
+    fn new() -> RoundRobinSched {
+        RoundRobinSched {
+            kernel: OptionalCell::empty(),
             num_procs_installed: Cell::new(0),
             next_up: Cell::new(0),
-            kernel_tick_duration_us: 10000,
         }
     }
 }
 
-impl Scheduler for RoundRobinForgivingSched {
-    fn schedule_next(&'static self) -> Option<(usize, u32)> {
-        if self.num_procs_installed.get() > 0 {
-            //debug!("next up: {}", self.next_up.get());
-            Some((self.next_up.get(), self.kernel_tick_duration_us))
-        } else {
+impl Scheduler for RoundRobinSched {
+    fn schedule_next(&'static self, interrupts_waiting: bool) -> Option<(usize, u32)> {
+        let should_break = interrupts_waiting
+            || unsafe { DynamicDeferredCall::global_instance_calls_pending().unwrap_or(false) }
+            || self.kernel.expect("sched fail").processes_blocked()
+            || self.num_procs_installed.get() == 0;
+        if should_break {
+            // don't schedule
             None
+        } else {
+            Some((self.next_up.get(), Self::DEFAULT_TIMESLICE_US))
         }
     }
-    fn scheduled(
-        &'static self,
-        idx: usize,
-        switch_reason: Option<ContextSwitchReason>,
-        us_used: u32,
-    ) {
+
+    fn scheduled(&'static self, idx: usize, _switch_reason: Option<ContextSwitchReason>) {
+        let last = self.next_up.get();
+        if idx == last {
+            if last < self.num_procs_installed.get() - 1 {
+                self.next_up.set(last + 1);
+            } else {
+                self.next_up.set(0);
+            }
+        } else {
+            panic!("Kernel just scheduled a different process than I requested");
+        }
+    }
+
+    fn set_num_procs(&'static self, num_procs: usize) {
+        self.num_procs_installed.set(num_procs);
+    }
+    fn set_kernel_ref(&'static self, kernel: &'static Kernel) {
+        self.kernel.set(kernel);
+    }
+}
+
+struct PunishingSched {
+    kernel: OptionalCell<&'static Kernel>,
+    num_procs_installed: Cell<usize>,
+    next_up: Cell<usize>,
+}
+
+impl PunishingSched {
+    const MAX_TIMESLICE_US: u32 = 20000;
+    const MIN_TIMESLICE_US: u32 = 5000;
+    fn new() -> PunishingSched {
+        PunishingSched {
+            kernel: OptionalCell::empty(),
+            num_procs_installed: Cell::new(0),
+            next_up: Cell::new(0),
+        }
+    }
+}
+
+impl Scheduler for PunishingSched {
+    fn schedule_next(&'static self, interrupts_waiting: bool) -> Option<(usize, u32)> {
+        let should_break = interrupts_waiting
+            || unsafe { DynamicDeferredCall::global_instance_calls_pending().unwrap_or(false) }
+            || self.kernel.expect("sched fail").processes_blocked()
+            || self.num_procs_installed.get() == 0;
+        if should_break {
+            // don't schedule
+            None
+        } else {
+            let idx = self.next_up.get();
+            let (priority, avg_time) = self.kernel.expect("tmp").processes[idx]
+                .map_or((0, core::u32::MAX), |proc| {
+                    (proc.get_priority(), proc.get_avg_exec_time_us())
+                });
+            let mut num_higher_priority = 0;
+            for p in self.kernel.expect("tmp").processes {
+                p.map(|proc| {
+                    if proc.get_priority() == priority {
+                        if proc.get_avg_exec_time_us() < avg_time {
+                            num_higher_priority += 1;
+                        }
+                    } else if proc.get_priority() > priority {
+                        num_higher_priority += 1;
+                    }
+                });
+            }
+            let spacing = (Self::MAX_TIMESLICE_US - Self::MIN_TIMESLICE_US)
+                / self.num_procs_installed.get() as u32;
+            let exec_time = Self::MAX_TIMESLICE_US - (spacing * num_higher_priority);
+            Some((idx, exec_time))
+        }
+    }
+    fn scheduled(&'static self, idx: usize, switch_reason: Option<ContextSwitchReason>) {
         let last = self.next_up.get();
         match switch_reason {
-            Some(ContextSwitchReason::Interrupted) => {
-                if us_used < self.kernel_tick_duration_us - MIN_QUANTA_THRESHOLD_US {
-                    //get to finish
-                    return;
-                }
+            Some(ContextSwitchReason::TimesliceExpired) => {
+                self.kernel.expect("tmp").processes[idx]
+                    .unwrap()
+                    .dec_priority();
             }
             _ => {}
         }
@@ -150,6 +227,9 @@ impl Scheduler for RoundRobinForgivingSched {
 
     fn set_num_procs(&'static self, num_procs: usize) {
         self.num_procs_installed.set(num_procs);
+    }
+    fn set_kernel_ref(&'static self, kernel: &'static Kernel) {
+        self.kernel.set(kernel);
     }
 }
 
@@ -174,36 +254,41 @@ pub struct Kernel {
 
 impl Kernel {
     pub fn new(processes: &'static [Option<&'static dyn process::ProcessType>]) -> Kernel {
-        unsafe {
-            Kernel {
-                work: Cell::new(0),
-                processes: processes,
-                grant_counter: Cell::new(0),
-                grants_finalized: Cell::new(false),
-                scheduler: static_init!(RoundRobinSched, RoundRobinSched::new(processes)),
-            }
+        Kernel {
+            work: Cell::new(0),
+            processes: processes,
+            grant_counter: Cell::new(0),
+            grants_finalized: Cell::new(false),
+            scheduler: unsafe { static_init!(PrioritySched, PrioritySched::new()) },
         }
     }
 
-    pub fn new_forgiving(
+    pub fn new_round_robin(
         processes: &'static [Option<&'static dyn process::ProcessType>],
     ) -> Kernel {
-        unsafe {
-            Kernel {
-                work: Cell::new(0),
-                processes: processes,
-                grant_counter: Cell::new(0),
-                grants_finalized: Cell::new(false),
-                scheduler: static_init!(
-                    RoundRobinForgivingSched,
-                    RoundRobinForgivingSched::new(processes)
-                ),
-            }
+        Kernel {
+            work: Cell::new(0),
+            processes: processes,
+            grant_counter: Cell::new(0),
+            grants_finalized: Cell::new(false),
+            scheduler: unsafe { static_init!(RoundRobinSched, RoundRobinSched::new()) },
+        }
+    }
+
+    pub fn new_punishing(
+        processes: &'static [Option<&'static dyn process::ProcessType>],
+    ) -> Kernel {
+        Kernel {
+            work: Cell::new(0),
+            processes: processes,
+            grant_counter: Cell::new(0),
+            grants_finalized: Cell::new(false),
+            scheduler: unsafe { static_init!(PunishingSched, PunishingSched::new()) },
         }
     }
 
     /// Called whenever the list of processes on the board has changed
-    crate fn process_list_changed(&self) {
+    crate fn process_list_changed(&'static self) {
         let mut num_procs_installed = 0;
         for p in self.processes.iter() {
             if p.is_some() {
@@ -211,6 +296,7 @@ impl Kernel {
             }
         }
         self.scheduler.set_num_procs(num_procs_installed);
+        self.scheduler.set_kernel_ref(self);
     }
 
     /// Something was scheduled for a process, so there is more work to do.
@@ -376,7 +462,9 @@ impl Kernel {
                 chip.service_pending_interrupts();
                 DynamicDeferredCall::call_global_instance_while(|| !chip.has_pending_interrupts());
 
-                while let Some((next_proc_idx, timeslice_us)) = self.scheduler.schedule_next() {
+                while let Some((next_proc_idx, timeslice_us)) =
+                    self.scheduler.schedule_next(chip.has_pending_interrupts())
+                {
                     self.processes[next_proc_idx].map(|process| {
                         let (given_chance, switch_reason_opt) = self.do_process(
                             platform,
@@ -387,19 +475,9 @@ impl Kernel {
                             MIN_QUANTA_THRESHOLD_US,
                         );
                         if given_chance {
-                            self.scheduler.scheduled(
-                                next_proc_idx,
-                                switch_reason_opt,
-                                process.get_last_us_used(),
-                            );
+                            self.scheduler.scheduled(next_proc_idx, switch_reason_opt);
                         }
                     });
-                    if chip.has_pending_interrupts()
-                        || DynamicDeferredCall::global_instance_calls_pending().unwrap_or(false)
-                        || self.processes_blocked()
-                    {
-                        break;
-                    }
                 }
 
                 chip.atomic(|| {
@@ -430,10 +508,18 @@ impl Kernel {
         systick.enable(false);
         let mut given_chance = false;
         let mut switch_reason_opt = None;
+        let mut first = true;
 
         loop {
-            if chip.has_pending_interrupts() {
-                break;
+            // if this is the first time this loop has iterated, dont break in the
+            // case of interrupts. This allows for the scheduler to schedule processes
+            // even with interrupts pending if it so chooses.
+            if !first {
+                if chip.has_pending_interrupts() {
+                    break;
+                }
+            } else {
+                first = false;
             }
 
             if systick.overflowed() || !systick.greater_than(min_quanta_threshold_us) {
@@ -451,8 +537,12 @@ impl Kernel {
                     chip.mpu().enable_mpu();
                     systick.enable(true);
                     let context_switch_reason = process.switch_to();
+                    let ticks = systick.get_value();
                     switch_reason_opt = context_switch_reason;
-                    process.set_last_us_used(systick.get_value());
+                    if context_switch_reason == Some(ContextSwitchReason::TimesliceExpired) {
+                        process.set_last_us_used(proc_timeslice_us);
+                    }
+                    process.set_last_us_used(proc_timeslice_us - ticks);
                     systick.enable(false);
                     chip.mpu().disable_mpu();
 
@@ -464,6 +554,7 @@ impl Kernel {
                             process.set_fault_state();
                         }
                         Some(ContextSwitchReason::SyscallFired { syscall }) => {
+                            process.debug_syscall_called();
                             // Handle each of the syscalls.
                             match syscall {
                                 Syscall::MEMOP { operand, arg0 } => {
@@ -551,7 +642,7 @@ impl Kernel {
                             break;
                         }
                         Some(ContextSwitchReason::Interrupted) => {
-                            // break to handle interrupt
+                            // break to handle bottom half of interrupt
                             break;
                         }
                         None => {

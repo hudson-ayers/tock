@@ -7,8 +7,9 @@ use core::{mem, ptr, slice, str};
 
 use crate::callback::{AppId, CallbackId};
 use crate::capabilities::ProcessManagementCapability;
-use crate::common::cells::MapCell;
+use crate::common::cells::{MapCell, NumericCellExt};
 use crate::common::{Queue, RingBuffer};
+use crate::debug;
 use crate::mem::{AppSlice, Shared};
 use crate::platform::mpu::{self, MPU};
 use crate::platform::Chip;
@@ -221,8 +222,15 @@ pub trait ProcessType {
     unsafe fn fault_fmt(&self, writer: &mut dyn Write);
     unsafe fn process_detail_fmt(&self, writer: &mut dyn Write);
 
+    //Additional methods for scheduler
+    fn set_priority(&self, us: usize);
+    fn get_priority(&self) -> usize;
+    fn inc_priority(&self);
+    fn dec_priority(&self);
     fn set_last_us_used(&self, us: u32);
     fn get_last_us_used(&self) -> u32;
+    fn get_avg_exec_time_us(&self) -> u32;
+    fn get_times_executed(&self) -> u64;
 
     // debug
 
@@ -239,6 +247,8 @@ pub trait ProcessType {
     fn debug_timeslice_expiration_count(&self) -> usize;
 
     fn debug_timeslice_expired(&self);
+
+    fn debug_syscall_called(&self);
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -367,6 +377,20 @@ pub struct FunctionCall {
 /// Stores state relevant to the scheduler for each process
 struct SchedulerState {
     us_used_last_exec: Cell<u32>,
+    average_us_per_exec: Cell<u32>, // Used by the PunishingSched scheduler
+    times_executed: Cell<u64>,      // Used by the PunishingSched scheduler
+    priority: Cell<usize>,          // Used by the PunishingSched scheduler
+}
+
+impl Default for SchedulerState {
+    fn default() -> SchedulerState {
+        SchedulerState {
+            us_used_last_exec: Cell::new(0),
+            average_us_per_exec: Cell::new(0),
+            times_executed: Cell::new(0),
+            priority: Cell::new(core::usize::MAX / 2),
+        }
+    }
 }
 
 /// State for helping with debugging apps.
@@ -856,12 +880,45 @@ impl<C: Chip> ProcessType for Process<'a, C> {
         self.process_name
     }
 
+    fn get_times_executed(&self) -> u64 {
+        self.scheduler_state.times_executed.get()
+    }
+
     fn set_last_us_used(&self, us: u32) {
-        self.scheduler_state.us_used_last_exec.set(us);
+        let mut_us = if us > 0 { us } else { 1 };
+        self.scheduler_state.us_used_last_exec.set(mut_us);
+        let prev = self.scheduler_state.times_executed.get();
+        self.scheduler_state.times_executed.set(prev + 1);
+        let mov_avg = ((self.scheduler_state.average_us_per_exec.get() as u64) * prev
+            + mut_us as u64)
+            / (prev + 1);
+        self.scheduler_state.average_us_per_exec.set(mov_avg as u32);
+    }
+
+    fn set_priority(&self, priority: usize) {
+        self.scheduler_state.priority.set(priority)
+    }
+    fn inc_priority(&self) {
+        if self.scheduler_state.priority.get() < core::usize::MAX {
+            self.scheduler_state.priority.increment();
+        }
+    }
+    fn dec_priority(&self) {
+        if self.scheduler_state.priority.get() > 0 {
+            self.scheduler_state.priority.decrement();
+        }
+    }
+
+    fn get_priority(&self) -> usize {
+        self.scheduler_state.priority.get()
     }
 
     fn get_last_us_used(&self) -> u32 {
         self.scheduler_state.us_used_last_exec.get()
+    }
+
+    fn get_avg_exec_time_us(&self) -> u32 {
+        self.scheduler_state.average_us_per_exec.get()
     }
 
     unsafe fn set_syscall_return_value(&self, return_value: isize) {
@@ -976,6 +1033,10 @@ impl<C: Chip> ProcessType for Process<'a, C> {
     fn debug_timeslice_expired(&self) {
         self.debug
             .map(|debug| debug.timeslice_expiration_count += 1);
+    }
+
+    fn debug_syscall_called(&self) {
+        self.debug.map(|debug| debug.syscall_count += 1);
     }
 
     unsafe fn fault_fmt(&self, writer: &mut dyn Write) {
@@ -1344,6 +1405,7 @@ impl<C: 'static + Chip> Process<'a, C> {
                 restart_count: 0,
                 timeslice_expiration_count: 0,
             });
+            process.scheduler_state = SchedulerState::default();
 
             let flash_protected_size = process.header.get_protected_size() as usize;
             let flash_app_start = app_flash_address as usize + flash_protected_size;

@@ -225,18 +225,19 @@ impl<'a, C: ProcessManagementCapability> ProcessConsole<'a, C> {
                                 );
                             });
                         } else if clean_str.starts_with("list") {
-                            debug!(" PID    Name                Quanta  Syscalls  Dropped Callbacks  Restarts    State");
+                            debug!(" PID    Name                Quanta  Syscalls  Dropped Callbacks  Restarts    Avg      State    ");
                             self.kernel
                                 .process_each_capability(&self.capability, |i, proc| {
                                     let pname = proc.get_process_name();
                                     debug!(
-                                        "  {:02}\t{:<20}{:6}{:10}{:19}{:10}  {:?}",
+                                        "  {:02}\t{:<20}{:6}{:10}{:19}{:10}{:12}  {:?}",
                                         i,
                                         pname,
                                         proc.debug_timeslice_expiration_count(),
                                         proc.debug_syscall_count(),
                                         proc.debug_dropped_callback_count(),
                                         proc.debug_restart_count(),
+                                        proc.get_avg_exec_time_us(),
                                         proc.get_state()
                                     );
                                 });
