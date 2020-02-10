@@ -231,6 +231,8 @@ pub trait ProcessType {
     fn get_last_us_used(&self) -> u32;
     fn get_avg_exec_time_us(&self) -> u32;
     fn get_times_executed(&self) -> u64;
+    fn set_used_this_ts(&self, us: u32);
+    fn get_used_this_ts(&self) -> u32;
 
     // debug
 
@@ -376,6 +378,7 @@ pub struct FunctionCall {
 
 /// Stores state relevant to the scheduler for each process
 struct SchedulerState {
+    us_used_this_timeslice: Cell<u32>,
     us_used_last_exec: Cell<u32>,
     average_us_per_exec: Cell<u32>, // Used by the PunishingSched scheduler
     times_executed: Cell<u64>,      // Used by the PunishingSched scheduler
@@ -385,6 +388,7 @@ struct SchedulerState {
 impl Default for SchedulerState {
     fn default() -> SchedulerState {
         SchedulerState {
+            us_used_this_timeslice: Cell::new(0),
             us_used_last_exec: Cell::new(0),
             average_us_per_exec: Cell::new(0),
             times_executed: Cell::new(0),
@@ -882,6 +886,14 @@ impl<C: Chip> ProcessType for Process<'a, C> {
 
     fn get_times_executed(&self) -> u64 {
         self.scheduler_state.times_executed.get()
+    }
+
+    fn set_used_this_ts(&self, us: u32) {
+        self.scheduler_state.us_used_this_timeslice.set(us);
+    }
+
+    fn get_used_this_ts(&self) -> u32 {
+        self.scheduler_state.us_used_this_timeslice.get()
     }
 
     fn set_last_us_used(&self, us: u32) {

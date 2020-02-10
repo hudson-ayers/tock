@@ -38,7 +38,12 @@ trait Scheduler {
     /// When process is scheduled, the ContextSwitchReason for this app returning
     /// is also passed to allow the scheduler to make decision on the basis of this
     /// if it so desires.
-    fn scheduled(&'static self, idx: usize, switch_reason: Option<ContextSwitchReason>);
+    fn scheduled(
+        &'static self,
+        idx: usize,
+        switch_reason: Option<ContextSwitchReason>,
+        us_used: u32,
+    );
 
     /// Called once apps have been loaded to inform the scheduler how many applications
     /// are installed on the board. Currently the scheduler trait assumes apps are not
@@ -79,7 +84,12 @@ impl Scheduler for PrioritySched {
             Some((self.next_up.get(), Self::DEFAULT_TIMESLICE_US))
         }
     }
-    fn scheduled(&'static self, idx: usize, _switch_reason: Option<ContextSwitchReason>) {
+    fn scheduled(
+        &'static self,
+        idx: usize,
+        _switch_reason: Option<ContextSwitchReason>,
+        _us_used: u32,
+    ) {
         let last = self.next_up.get();
         if idx == last {
             if last < self.num_procs_installed.get() - 1 {
@@ -128,20 +138,48 @@ impl Scheduler for RoundRobinSched {
             // don't schedule
             None
         } else {
-            Some((self.next_up.get(), Self::DEFAULT_TIMESLICE_US))
+            let next = self.next_up.get();
+            let used_this_timeslice = self
+                .kernel
+                .map(|k| k.processes[next])
+                .unwrap()
+                .unwrap()
+                .get_used_this_ts();
+            Some((next, Self::DEFAULT_TIMESLICE_US - used_this_timeslice))
         }
     }
 
-    fn scheduled(&'static self, idx: usize, _switch_reason: Option<ContextSwitchReason>) {
-        let last = self.next_up.get();
-        if idx == last {
-            if last < self.num_procs_installed.get() - 1 {
-                self.next_up.set(last + 1);
-            } else {
-                self.next_up.set(0);
+    fn scheduled(
+        &'static self,
+        idx: usize,
+        switch_reason: Option<ContextSwitchReason>,
+        us_used: u32,
+    ) {
+        let process = self.kernel.map(|k| k.processes[idx]).unwrap().unwrap();
+        let mut reschedule = false;
+        debug!("us_used: {:?}", us_used);
+        let used_so_far = process.get_used_this_ts() + us_used;
+        if switch_reason == Some(ContextSwitchReason::TimesliceExpired) {
+            process.set_last_us_used(Self::DEFAULT_TIMESLICE_US);
+        } else if switch_reason == Some(ContextSwitchReason::Interrupted) {
+            if Self::DEFAULT_TIMESLICE_US - used_so_far >= MIN_QUANTA_THRESHOLD_US {
+                process.set_used_this_ts(used_so_far);
+                reschedule = true; //Was interrupted before using entire timeslice!
             }
+        // want to inform scheduler of time passed and to reschedule
         } else {
-            panic!("Kernel just scheduled a different process than I requested");
+            process.set_last_us_used(used_so_far);
+        }
+        if !reschedule {
+            process.set_used_this_ts(0);
+            let last = self.next_up.get();
+            if idx == last {
+                if last < self.num_procs_installed.get() - 1 {
+                    self.next_up.set(last + 1);
+                } else {
+                    self.next_up.set(0);
+                }
+            }
         }
     }
 
@@ -153,6 +191,12 @@ impl Scheduler for RoundRobinSched {
     }
 }
 
+/// Implementation of a scheduler that punishes processes which frequently
+/// exceed their timeslice or which use more CPU time on average than other
+/// processes on the board by assigning these processes smaller timeslices,
+/// and rewarding processes which behave better than others with larger timeslices,
+/// within a set range of possible timeslices. This design has the benefit of being
+/// self-correcting to some extent.
 struct PunishingSched {
     kernel: OptionalCell<&'static Kernel>,
     num_procs_installed: Cell<usize>,
@@ -204,7 +248,12 @@ impl Scheduler for PunishingSched {
             Some((idx, exec_time))
         }
     }
-    fn scheduled(&'static self, idx: usize, switch_reason: Option<ContextSwitchReason>) {
+    fn scheduled(
+        &'static self,
+        idx: usize,
+        switch_reason: Option<ContextSwitchReason>,
+        us_used: u32,
+    ) {
         let last = self.next_up.get();
         match switch_reason {
             Some(ContextSwitchReason::TimesliceExpired) => {
@@ -231,6 +280,16 @@ impl Scheduler for PunishingSched {
     fn set_kernel_ref(&'static self, kernel: &'static Kernel) {
         self.kernel.set(kernel);
     }
+}
+
+/// Returned by do_process with information for the scheduler
+struct DoProcessResult {
+    /// Whether this process was given a chance to execute
+    given_chance: bool,
+    ///If the process was scheduled, why did it switch back to the kernel?
+    switch_reason: Option<ContextSwitchReason>,
+    ///If the process was scheduled, how much time did it use?
+    us_used: Option<u32>,
 }
 
 /// Main object for the kernel. Each board will need to create one.
@@ -466,7 +525,7 @@ impl Kernel {
                     self.scheduler.schedule_next(chip.has_pending_interrupts())
                 {
                     self.processes[next_proc_idx].map(|process| {
-                        let (given_chance, switch_reason_opt) = self.do_process(
+                        let ret = self.do_process(
                             platform,
                             chip,
                             process,
@@ -474,8 +533,12 @@ impl Kernel {
                             timeslice_us,
                             MIN_QUANTA_THRESHOLD_US,
                         );
-                        if given_chance {
-                            self.scheduler.scheduled(next_proc_idx, switch_reason_opt);
+                        if ret.given_chance {
+                            self.scheduler.scheduled(
+                                next_proc_idx,
+                                ret.switch_reason,
+                                ret.us_used.unwrap(),
+                            );
                         }
                     });
                 }
@@ -500,7 +563,7 @@ impl Kernel {
         ipc: Option<&crate::ipc::IPC>,
         proc_timeslice_us: u32,
         min_quanta_threshold_us: u32,
-    ) -> (bool, Option<ContextSwitchReason>) {
+    ) -> DoProcessResult {
         let appid = process.appid();
         let systick = chip.systick();
         systick.reset();
@@ -509,6 +572,7 @@ impl Kernel {
         let mut given_chance = false;
         let mut switch_reason_opt = None;
         let mut first = true;
+        let mut us_used = None;
 
         loop {
             // if this is the first time this loop has iterated, dont break in the
@@ -535,16 +599,12 @@ impl Kernel {
                     given_chance = true;
                     process.setup_mpu();
                     chip.mpu().enable_mpu();
-                    systick.enable(true);
+                    systick.enable(true); //Enables systick interrupts
                     let context_switch_reason = process.switch_to();
-                    let ticks = systick.get_value();
-                    switch_reason_opt = context_switch_reason;
-                    if context_switch_reason == Some(ContextSwitchReason::TimesliceExpired) {
-                        process.set_last_us_used(proc_timeslice_us);
-                    }
-                    process.set_last_us_used(proc_timeslice_us - ticks);
-                    systick.enable(false);
+                    us_used = Some(proc_timeslice_us - systick.get_value()); // call immediately after returning from process
+                    systick.enable(false); //disables systick interrupts
                     chip.mpu().disable_mpu();
+                    switch_reason_opt = context_switch_reason;
 
                     // Now the process has returned back to the kernel. Check
                     // why and handle the process as appropriate.
@@ -703,6 +763,10 @@ impl Kernel {
             }
         }
         systick.reset();
-        (given_chance, switch_reason_opt)
+        DoProcessResult {
+            given_chance: given_chance,
+            switch_reason: switch_reason_opt,
+            us_used: us_used,
+        }
     }
 }

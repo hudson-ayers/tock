@@ -292,7 +292,7 @@ pub unsafe fn reset_handler() {
         trng: true,
     });
 
-    let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new_punishing(&PROCESSES));
+    let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new_round_robin(&PROCESSES));
 
     // # CONSOLE
     // Create a shared UART channel for the consoles and for kernel debug.
