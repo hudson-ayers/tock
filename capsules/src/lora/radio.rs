@@ -730,9 +730,9 @@ pub struct App {
     callback: Option<Callback>,
 }
 
-pub struct RadioDriver<'a> {
+pub struct RadioDriver<'a, S: spi::SpiMasterDevice> {
     /// Underlying physical device
-    device: &'a Radio<'a, dyn spi::SpiMasterDevice>,
+    device: &'a Radio<'a, S>,
 
     /// Grant of apps that use this radio driver.
     apps: Grant<App>,
@@ -744,8 +744,8 @@ impl Default for App {
     }
 }
 
-impl RadioDriver<'a> {
-    pub fn new(device: &'a Radio<'a, spi::SpiMasterDevice>, grant: Grant<App>) -> RadioDriver<'a> {
+impl<'a, S: spi::SpiMasterDevice> RadioDriver<'a, S> {
+    pub fn new(device: &'a Radio<'a, S>, grant: Grant<App>) -> RadioDriver<'a, S> {
         RadioDriver {
             device: device,
             apps: grant,
@@ -753,7 +753,7 @@ impl RadioDriver<'a> {
     }
 }
 
-impl Driver for RadioDriver<'a> {
+impl<S: spi::SpiMasterDevice> Driver for RadioDriver<'a, S> {
     /// Command interface.
     ///
     /// ### `command_num`
