@@ -3,8 +3,8 @@
 //! utility functions to reduce repeated code between different scheduler
 //! implementations.
 
-crate mod multilevel_feedback;
-crate mod priority;
+//crate mod multilevel_feedback;
+//crate mod priority;
 crate mod round_robin;
 
 use core::cell::Cell;
@@ -19,12 +19,71 @@ use crate::grant::Grant;
 use crate::ipc;
 use crate::memop;
 use crate::platform::{Chip, Platform};
-use crate::process::{self, Task};
+use crate::process::{self, ProcessType, Task};
 use crate::returncode::ReturnCode;
 use crate::syscall::{ContextSwitchReason, Syscall};
 
+// Allow different schedulers to store processes in any container
+// they choose (Array, Multiple Queues, etc.)
+// Also stores scheduler-specific ProcessState alongside Process
+//
+// TODO: Is this better than scheduling algorithms just storing queues etc. of appids but leaving
+// process array unchanged? TBD
+//
+// Okay, I need to think about this. To let underlying type of ProcessContainer change
+// scheduler needs to actually hold the container?
+//
+// Now I think IntoIterator is no good bc of restrictions on IntoIter type making it not actually
+// useful, think I need it to be Iterator afterall...wait no, next(&self mut) is no good..
+//
+// TODO: Container -> Collection
+//
+// Looks like collection traits may not actually be an option in Rust. Next best thing may be just
+// an iterator? Scheduler could have a reference to whatever data structure, and kernel gets
+// iterator of processes? This would break any optimizations based on indexes (but I think this is
+// true for any collection trait with the move to appId?)
+pub trait ProcessContainer {
+    //type ProcessState; // needs to match ProcessState of Scheduler in use
+    //def want to store State alongside Process, TODO
+
+    //fn as_any(&self) -> &dyn Any; //required so that scheduler can cast to concrete type used
+    //fn new() -> Self; //Needed so static_init!() call doesnt change based on scheduler in use
+    //
+
+    fn get_proc_by_id(&self, process_index: usize) -> Option<&dyn ProcessType>;
+    fn next(&self) -> Option<&dyn ProcessType>;
+    fn reset(&self);
+
+    //fn iter(&self) -> dyn Iterator<Item = core::option::Option<&dyn ProcessType>>;
+    //fn iter_proc_state(&self) -> Iterator<ProcessState>; seperate out process state for now
+    /*
+    fn process_map_or<F, R>(&self, default: R, process_index: usize, closure: F) -> R
+    where
+        F: FnOnce(&dyn process::ProcessType) -> R;
+    fn process_each<F>(&self, closure: F)
+    where
+        F: Fn(&dyn process::ProcessType);
+
+    fn process_until<F>(&self, closure: F) -> ReturnCode
+    where
+        F: Fn(&dyn process::ProcessType) -> ReturnCode;
+
+    fn process_each_capability<F>(
+        &'static self,
+        _capability: &dyn capabilities::ProcessManagementCapability,
+        closure: F,
+    ) where
+        F: Fn(usize, &dyn process::ProcessType);
+    */
+
+    fn len(&self) -> usize;
+    // consider function to iterate over process IDs then punt over everything to process_map_or
+    fn active(&self) -> usize; // Number of process slots occupied
+}
+
 pub trait Scheduler {
     type ProcessState;
+    //type Container: ProcessContainer;
     //TODO: Add function called when number of processes on board changes, to future-proof
     //for dynamic loading of apps
 
@@ -37,15 +96,22 @@ pub trait Scheduler {
         ipc: Option<&ipc::IPC>,
         _capability: &dyn capabilities::MainLoopCapability,
     );
+    //fn processes(&self) -> &'static dyn ProcessContainer;
 }
 
+// New idea: back to ProcessContainer trait
 /// Main object for the kernel. Each board will need to create one.
 pub struct Kernel {
     /// How many "to-do" items exist at any given time. These include
     /// outstanding callbacks and processes in the Running state.
     work: Cell<usize>,
     /// This holds a pointer to the static array of Process pointers.
-    processes: &'static [Option<&'static dyn process::ProcessType>],
+    //processes: &'static [Option<&'static dyn process::ProcessType>],
+    processes: &'static dyn ProcessContainer,
+    //processes: &'static dyn IntoIterator<
+    //    Item = &'static core::option::Option<&'static dyn ProcessType>,
+    //    IntoIter = core::slice::Iter<'static, core::option::Option<&'static dyn ProcessType>>,
+    //>,
     /// How many grant regions have been setup. This is incremented on every
     /// call to `create_grant()`. We need to explicitly track this so that when
     /// processes are created they can allocated pointers for each grant.
@@ -58,7 +124,7 @@ pub struct Kernel {
 }
 
 impl Kernel {
-    pub fn new(processes: &'static [Option<&'static dyn process::ProcessType>]) -> Kernel {
+    pub fn new(processes: &'static dyn ProcessContainer) -> Kernel {
         Kernel {
             work: Cell::new(0),
             processes: processes,
@@ -95,7 +161,9 @@ impl Kernel {
         if process_index > self.processes.len() {
             return default;
         }
-        self.processes[process_index].map_or(default, |process| closure(process))
+        self.processes
+            .get_proc_by_id(process_index)
+            .map_or(default, |process| closure(process))
     }
 
     /// Run a closure on every valid process. This will iterate the array of
@@ -104,14 +172,29 @@ impl Kernel {
     where
         F: Fn(&dyn process::ProcessType),
     {
-        for process in self.processes.iter() {
-            match process {
-                Some(p) => {
-                    closure(*p);
-                }
-                None => {}
+        while let Some(process) = self.processes.next() {
+            closure(process);
+        }
+        self.processes.reset();
+    }
+
+    /// Run a closure on every process, but only continue if the closure returns
+    /// `FAIL`. That is, if the closure returns any other return code than
+    /// `FAIL`, that value will be returned from this function and the iteration
+    /// of the array of processes will stop.
+    crate fn process_until<F>(&self, closure: F) -> ReturnCode
+    where
+        F: Fn(&dyn process::ProcessType) -> ReturnCode,
+    {
+        while let Some(process) = self.processes.next() {
+            let ret = closure(process);
+            if ret != ReturnCode::FAIL {
+                self.processes.reset();
+                return ret;
             }
         }
+        self.processes.reset();
+        ReturnCode::FAIL
     }
 
     /// Run a closure on every valid process. This will iterate the
@@ -125,36 +208,12 @@ impl Kernel {
     ) where
         F: Fn(usize, &dyn process::ProcessType),
     {
-        for (i, process) in self.processes.iter().enumerate() {
-            match process {
-                Some(p) => {
-                    closure(i, *p);
-                }
-                None => {}
-            }
+        let mut i = 0;
+        while let Some(process) = self.processes.next() {
+            i += 1;
+            closure(i, process);
         }
-    }
-
-    /// Run a closure on every process, but only continue if the closure returns
-    /// `FAIL`. That is, if the closure returns any other return code than
-    /// `FAIL`, that value will be returned from this function and the iteration
-    /// of the array of processes will stop.
-    crate fn process_until<F>(&self, closure: F) -> ReturnCode
-    where
-        F: Fn(&dyn process::ProcessType) -> ReturnCode,
-    {
-        for process in self.processes.iter() {
-            match process {
-                Some(p) => {
-                    let ret = closure(*p);
-                    if ret != ReturnCode::FAIL {
-                        return ret;
-                    }
-                }
-                None => {}
-            }
-        }
-        ReturnCode::FAIL
+        self.processes.reset();
     }
 
     /// Return how many processes this board supports.
@@ -210,11 +269,10 @@ impl Kernel {
     /// function, since capsules should not be able to arbitrarily restart all
     /// apps.
     pub fn hardfault_all_apps<C: capabilities::ProcessManagementCapability>(&self, _c: &C) {
-        for p in self.processes.iter() {
-            p.map(|process| {
-                process.set_fault_state();
-            });
+        while let Some(process) = self.processes.next() {
+            process.set_fault_state();
         }
+        self.processes.reset();
     }
 
     /// Schedulers should call this to handle callbacks for yielded or unstarted apps.

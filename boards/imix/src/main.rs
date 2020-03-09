@@ -22,10 +22,10 @@ use kernel::hil::radio;
 #[allow(unused_imports)]
 use kernel::hil::radio::{RadioConfig, RadioData};
 use kernel::hil::Controller;
-use kernel::RoundRobinSched;
 use kernel::Scheduler;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, debug_gpio, static_init};
+use kernel::{ProcessArray, RoundRobinSched};
 
 use components;
 use components::alarm::{AlarmDriverComponent, AlarmMuxComponent};
@@ -296,7 +296,8 @@ pub unsafe fn reset_handler() {
         trng: true,
     });
 
-    let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new(&PROCESSES));
+    let process_container = static_init!(ProcessArray, ProcessArray::new(&PROCESSES));
+    let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new(process_container));
 
     let dynamic_deferred_call_clients =
         static_init!([DynamicDeferredCallClientState; 2], Default::default());
@@ -524,6 +525,9 @@ pub unsafe fn reset_handler() {
         [Option<<SchedType as Scheduler>::ProcessState>; NUM_PROCS],
         Default::default()
     );
-    let scheduler = static_init!(SchedType, SchedType::new(board_kernel, proc_state));
+    let scheduler = static_init!(
+        SchedType,
+        SchedType::new(board_kernel, proc_state, process_container)
+    );
     scheduler.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);
 }
