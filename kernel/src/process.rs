@@ -16,6 +16,7 @@ use crate::platform::mpu::{self, MPU};
 use crate::platform::Chip;
 use crate::returncode::ReturnCode;
 use crate::sched::Kernel;
+use crate::sched::{ProcessCollection, ProcessIter};
 use crate::syscall::{self, Syscall, UserspaceKernelBoundary};
 use crate::tbfheader;
 use core::cmp::max;
@@ -35,7 +36,8 @@ pub fn load_processes<C: Chip>(
     chip: &'static C,
     start_of_flash: *const u8,
     app_memory: &mut [u8],
-    procs: &'static mut [Option<&'static dyn ProcessType>],
+    //procs: &'static mut [Option<&'static dyn ProcessType>],
+    procs: &mut dyn ProcessCollection,
     fault_response: FaultResponse,
     _capability: &dyn ProcessManagementCapability,
 ) {
@@ -63,7 +65,8 @@ pub fn load_processes<C: Chip>(
                     break;
                 }
             } else {
-                procs[i] = process;
+                procs.load_process_with_id(process, i);
+                //procs[i] = process;
             }
 
             apps_in_flash_ptr = apps_in_flash_ptr.add(flash_offset);

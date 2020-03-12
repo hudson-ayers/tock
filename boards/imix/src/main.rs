@@ -25,7 +25,7 @@ use kernel::hil::Controller;
 use kernel::Scheduler;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, debug_gpio, static_init};
-use kernel::{ProcessArray, RoundRobinSched};
+use kernel::{PrioritySched, ProcessArray, RRProcessArray, RoundRobinSched};
 
 use components;
 use components::alarm::{AlarmDriverComponent, AlarmMuxComponent};
@@ -296,8 +296,7 @@ pub unsafe fn reset_handler() {
         trng: true,
     });
 
-    let process_container = static_init!(ProcessArray, ProcessArray::new(&PROCESSES));
-    let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new(process_container));
+    let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new());
 
     let dynamic_deferred_call_clients =
         static_init!([DynamicDeferredCallClientState; 2], Default::default());
@@ -510,17 +509,20 @@ pub unsafe fn reset_handler() {
         /// Beginning of the ROM region containing app images.
         static _sapps: u8;
     }
+
+    type SchedType = PrioritySched;
+    let process_container = static_init!(ProcessArray, ProcessArray::new(&mut PROCESSES));
     kernel::procs::load_processes(
         board_kernel,
         chip,
         &_sapps as *const u8,
         &mut APP_MEMORY,
-        &mut PROCESSES,
+        process_container,
         FAULT_RESPONSE,
         &process_mgmt_cap,
     );
+    board_kernel.set_proc_container(process_container);
 
-    type SchedType = RoundRobinSched;
     let proc_state = static_init!(
         [Option<<SchedType as Scheduler>::ProcessState>; NUM_PROCS],
         Default::default()

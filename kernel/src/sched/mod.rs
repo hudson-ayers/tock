@@ -4,7 +4,7 @@
 //! implementations.
 
 //crate mod multilevel_feedback;
-//crate mod priority;
+crate mod priority;
 crate mod round_robin;
 
 use core::cell::Cell;
@@ -22,27 +22,17 @@ use crate::platform::{Chip, Platform};
 use crate::process::{self, ProcessType, Task};
 use crate::returncode::ReturnCode;
 use crate::syscall::{ContextSwitchReason, Syscall};
+use tock_cells::optional_cell::OptionalCell;
 
 // Allow different schedulers to store processes in any container
 // they choose (Array, Multiple Queues, etc.)
-// Also stores scheduler-specific ProcessState alongside Process
+// TODO: Also store scheduler-specific ProcessState alongside Process
 //
 // TODO: Is this better than scheduling algorithms just storing queues etc. of appids but leaving
 // process array unchanged? TBD
 //
-// Okay, I need to think about this. To let underlying type of ProcessContainer change
-// scheduler needs to actually hold the container?
-//
-// Now I think IntoIterator is no good bc of restrictions on IntoIter type making it not actually
-// useful, think I need it to be Iterator afterall...wait no, next(&self mut) is no good..
-//
 // TODO: Container -> Collection
-//
-// Looks like collection traits may not actually be an option in Rust. Next best thing may be just
-// an iterator? Scheduler could have a reference to whatever data structure, and kernel gets
-// iterator of processes? This would break any optimizations based on indexes (but I think this is
-// true for any collection trait with the move to appId?)
-pub trait ProcessContainer {
+pub trait ProcessCollection {
     //type ProcessState; // needs to match ProcessState of Scheduler in use
     //def want to store State alongside Process, TODO
 
@@ -50,40 +40,48 @@ pub trait ProcessContainer {
     //fn new() -> Self; //Needed so static_init!() call doesnt change based on scheduler in use
     //
 
-    fn get_proc_by_id(&self, process_index: usize) -> Option<&dyn ProcessType>;
+    /// Load reference to process created with `Process::create` into container
+    fn load_process_with_id(&mut self, proc: Option<&'static dyn ProcessType>, idx: usize); //Capability?
+
+    /// Returns process with the matching ID, if it exists
+    fn get_proc_by_id(&self, process_index: usize) -> Option<&'static dyn ProcessType>;
+
+    /// Used internally by ProcessIter, obtains next Process reference
     fn next(&self) -> Option<&dyn ProcessType>;
-    fn reset(&self);
 
-    //fn iter(&self) -> dyn Iterator<Item = core::option::Option<&dyn ProcessType>>;
-    //fn iter_proc_state(&self) -> Iterator<ProcessState>; seperate out process state for now
-    /*
-    fn process_map_or<F, R>(&self, default: R, process_index: usize, closure: F) -> R
-    where
-        F: FnOnce(&dyn process::ProcessType) -> R;
-    fn process_each<F>(&self, closure: F)
-    where
-        F: Fn(&dyn process::ProcessType);
+    /// Used internally by ProcessIter, resets position of Iterator
+    fn reset(&self); //Must decrement count of ProcessIter
 
-    fn process_until<F>(&self, closure: F) -> ReturnCode
-    where
-        F: Fn(&dyn process::ProcessType) -> ReturnCode;
+    fn iter(&'static self) -> Option<ProcessIter>; //returns None if another ProcessIter exists
 
-    fn process_each_capability<F>(
-        &'static self,
-        _capability: &dyn capabilities::ProcessManagementCapability,
-        closure: F,
-    ) where
-        F: Fn(usize, &dyn process::ProcessType);
-    */
-
+    /// Number of process slots
     fn len(&self) -> usize;
-    // consider function to iterate over process IDs then punt over everything to process_map_or
+
+    /// Number of process slots in use
     fn active(&self) -> usize; // Number of process slots occupied
+}
+
+pub struct ProcessIter {
+    inner: &'static dyn ProcessCollection,
+}
+
+impl Iterator for ProcessIter {
+    type Item = &'static dyn ProcessType;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+}
+
+impl Drop for ProcessIter {
+    fn drop(&mut self) {
+        self.inner.reset();
+    }
 }
 
 pub trait Scheduler {
     type ProcessState;
-    //type Container: ProcessContainer;
+    //type Container: ProcessCollection;
     //TODO: Add function called when number of processes on board changes, to future-proof
     //for dynamic loading of apps
 
@@ -96,22 +94,17 @@ pub trait Scheduler {
         ipc: Option<&ipc::IPC>,
         _capability: &dyn capabilities::MainLoopCapability,
     );
-    //fn processes(&self) -> &'static dyn ProcessContainer;
+    //fn processes(&self) -> &'static dyn ProcessCollection;
 }
 
-// New idea: back to ProcessContainer trait
+// New idea: back to ProcessCollection trait
 /// Main object for the kernel. Each board will need to create one.
 pub struct Kernel {
     /// How many "to-do" items exist at any given time. These include
     /// outstanding callbacks and processes in the Running state.
     work: Cell<usize>,
     /// This holds a pointer to the static array of Process pointers.
-    //processes: &'static [Option<&'static dyn process::ProcessType>],
-    processes: &'static dyn ProcessContainer,
-    //processes: &'static dyn IntoIterator<
-    //    Item = &'static core::option::Option<&'static dyn ProcessType>,
-    //    IntoIter = core::slice::Iter<'static, core::option::Option<&'static dyn ProcessType>>,
-    //>,
+    processes: OptionalCell<&'static dyn ProcessCollection>,
     /// How many grant regions have been setup. This is incremented on every
     /// call to `create_grant()`. We need to explicitly track this so that when
     /// processes are created they can allocated pointers for each grant.
@@ -124,13 +117,18 @@ pub struct Kernel {
 }
 
 impl Kernel {
-    pub fn new(processes: &'static dyn ProcessContainer) -> Kernel {
+    pub fn new() -> Kernel {
         Kernel {
             work: Cell::new(0),
-            processes: processes,
+            processes: OptionalCell::empty(),
             grant_counter: Cell::new(0),
             grants_finalized: Cell::new(false),
         }
+    }
+
+    /// Call after processes have been loaded into the container.
+    pub fn set_proc_container(&self, processes: &'static dyn ProcessCollection) {
+        self.processes.set(processes);
     }
 
     /// Something was scheduled for a process, so there is more work to do.
@@ -158,10 +156,11 @@ impl Kernel {
     where
         F: FnOnce(&dyn process::ProcessType) -> R,
     {
-        if process_index > self.processes.len() {
+        if process_index > self.processes.expect("ProcessCollection missing").len() {
             return default;
         }
         self.processes
+            .expect("ProcessCollection missing")
             .get_proc_by_id(process_index)
             .map_or(default, |process| closure(process))
     }
@@ -172,10 +171,13 @@ impl Kernel {
     where
         F: Fn(&dyn process::ProcessType),
     {
-        while let Some(process) = self.processes.next() {
-            closure(process);
+        if let Some(proc_iter) = self.processes.expect("ProcessCollection missing").iter() {
+            for process in proc_iter {
+                closure(process);
+            }
+        } else {
+            panic!("No ProcessIter");
         }
-        self.processes.reset();
     }
 
     /// Run a closure on every process, but only continue if the closure returns
@@ -186,14 +188,18 @@ impl Kernel {
     where
         F: Fn(&dyn process::ProcessType) -> ReturnCode,
     {
-        while let Some(process) = self.processes.next() {
-            let ret = closure(process);
-            if ret != ReturnCode::FAIL {
-                self.processes.reset();
-                return ret;
+        if let Some(proc_iter) = self.processes.expect("ProcessCollection missing").iter() {
+            for process in proc_iter {
+                let ret = closure(process);
+                if ret != ReturnCode::FAIL {
+                    self.processes.expect("ProcessCollection missing").reset();
+                    return ret;
+                }
             }
+        } else {
+            //TODO: If this panic is impossible, make iter() not return an Option
+            panic!("No ProcessIter");
         }
-        self.processes.reset();
         ReturnCode::FAIL
     }
 
@@ -208,17 +214,18 @@ impl Kernel {
     ) where
         F: Fn(usize, &dyn process::ProcessType),
     {
-        let mut i = 0;
-        while let Some(process) = self.processes.next() {
-            i += 1;
-            closure(i, process);
-        }
-        self.processes.reset();
+        if let Some(proc_iter) = self.processes.expect("ProcessCollection missing").iter() {
+            for (i, process) in proc_iter.enumerate() {
+                closure(i, process);
+            }
+        } else {
+            panic!("No ProcessIter")
+        };
     }
 
     /// Return how many processes this board supports.
     crate fn number_of_process_slots(&self) -> usize {
-        self.processes.len()
+        self.processes.expect("ProcessCollection missing").len()
     }
 
     /// Create a new grant. This is used in board initialization to setup grants
@@ -269,10 +276,10 @@ impl Kernel {
     /// function, since capsules should not be able to arbitrarily restart all
     /// apps.
     pub fn hardfault_all_apps<C: capabilities::ProcessManagementCapability>(&self, _c: &C) {
-        while let Some(process) = self.processes.next() {
+        while let Some(process) = self.processes.expect("ProcessCollection missing").next() {
             process.set_fault_state();
         }
-        self.processes.reset();
+        self.processes.expect("ProcessCollection missing").reset();
     }
 
     /// Schedulers should call this to handle callbacks for yielded or unstarted apps.
