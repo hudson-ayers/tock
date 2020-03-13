@@ -25,7 +25,7 @@ use kernel::hil::Controller;
 use kernel::Scheduler;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, debug_gpio, static_init};
-use kernel::{PrioritySched, ProcessArray, RRProcessArray, RoundRobinSched};
+use kernel::{PrioritySched, ProcessArray, ProcessCollection, RRProcessArray, RoundRobinSched};
 
 use components;
 use components::alarm::{AlarmDriverComponent, AlarmMuxComponent};
@@ -106,14 +106,15 @@ const FAULT_RESPONSE: kernel::procs::FaultResponse = kernel::procs::FaultRespons
 #[link_section = ".app_memory"]
 static mut APP_MEMORY: [u8; 32768] = [0; 32768];
 
-static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] =
-    [None; NUM_PROCS];
 static mut CHIP: Option<&'static sam4l::chip::Sam4l> = None;
 
 /// Dummy buffer that causes the linker to reserve enough space for the stack.
 #[no_mangle]
 #[link_section = ".stack_buffer"]
 pub static mut STACK_MEMORY: [u8; 0x2000] = [0; 0x2000];
+
+/// Pointer to Process Container (initialized via static_init)
+static mut PROCESS_COLLECTION_PTR: Option<*const dyn ProcessCollection> = None;
 
 struct Imix {
     pconsole: &'static capsules::process_console::ProcessConsole<
@@ -511,17 +512,28 @@ pub unsafe fn reset_handler() {
     }
 
     type SchedType = PrioritySched;
-    let process_container = static_init!(ProcessArray, ProcessArray::new(&mut PROCESSES));
+    let processes = static_init!(
+        [Option<
+            //(
+            &'static dyn kernel::procs::ProcessType, //<SchedType as Scheduler>::ProcessState
+                                                     //)
+        >; NUM_PROCS],
+        [None; NUM_PROCS]
+    );
+    let process_collection = static_init!(ProcessArray, ProcessArray::new(processes));
+
+    PROCESS_COLLECTION_PTR = Some(process_collection);
+
     kernel::procs::load_processes(
         board_kernel,
         chip,
         &_sapps as *const u8,
         &mut APP_MEMORY,
-        process_container,
+        process_collection,
         FAULT_RESPONSE,
         &process_mgmt_cap,
     );
-    board_kernel.set_proc_container(process_container);
+    board_kernel.set_proc_container(process_collection);
 
     let proc_state = static_init!(
         [Option<<SchedType as Scheduler>::ProcessState>; NUM_PROCS],
@@ -529,7 +541,7 @@ pub unsafe fn reset_handler() {
     );
     let scheduler = static_init!(
         SchedType,
-        SchedType::new(board_kernel, proc_state, process_container)
+        SchedType::new(board_kernel, proc_state, process_collection)
     );
     scheduler.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);
 }

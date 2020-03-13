@@ -45,7 +45,7 @@ pub use crate::returncode::ReturnCode;
 //pub use crate::sched::multilevel_feedback::MultiFeedbackSched;
 pub use crate::sched::priority::{PrioritySched, ProcessArray};
 pub use crate::sched::round_robin::{RRProcessArray, RoundRobinSched};
-pub use crate::sched::{Kernel, Scheduler};
+pub use crate::sched::{Kernel, ProcessCollection, Scheduler};
 
 // Export only select items from the process module. To remove the name conflict
 // this cannot be called `process`, so we use a shortened version. These
