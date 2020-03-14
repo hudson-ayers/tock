@@ -76,7 +76,7 @@ pub unsafe fn panic<L: hil::led::Led, W: Write + IoWrite, C: Chip>(
     panic_info: &PanicInfo,
     nop: &dyn Fn(),
     //processes: &'static [Option<&'static dyn ProcessType>],
-    processes: Option<*const ProcessCollection>,
+    processes: Option<*const dyn ProcessCollection>,
     chip: &'static Option<&'static C>,
 ) -> ! {
     panic_begin(nop);
@@ -141,7 +141,7 @@ pub unsafe fn panic_cpu_state<W: Write, C: Chip>(
 ///
 /// **NOTE:** The supplied `writer` must be synchronous.
 pub unsafe fn panic_process_info<W: Write>(
-    procs: Option<*const ProcessCollection>,
+    procs: Option<*const dyn ProcessCollection>,
     writer: &mut W,
 ) {
     // print data about each process

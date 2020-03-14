@@ -513,12 +513,11 @@ pub unsafe fn reset_handler() {
 
     type SchedType = PrioritySched;
     let processes = static_init!(
-        [Option<
-            //(
-            &'static dyn kernel::procs::ProcessType, //<SchedType as Scheduler>::ProcessState
-                                                     //)
-        >; NUM_PROCS],
-        [None; NUM_PROCS]
+        [(
+            Option<&'static dyn kernel::procs::ProcessType>,
+            <SchedType as Scheduler>::ProcessState
+        ); NUM_PROCS],
+        Default::default()
     );
     let process_collection = static_init!(ProcessArray, ProcessArray::new(processes));
 
@@ -535,13 +534,6 @@ pub unsafe fn reset_handler() {
     );
     board_kernel.set_proc_container(process_collection);
 
-    let proc_state = static_init!(
-        [Option<<SchedType as Scheduler>::ProcessState>; NUM_PROCS],
-        Default::default()
-    );
-    let scheduler = static_init!(
-        SchedType,
-        SchedType::new(board_kernel, proc_state, process_collection)
-    );
+    let scheduler = static_init!(SchedType, SchedType::new(board_kernel, process_collection));
     scheduler.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);
 }

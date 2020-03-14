@@ -22,13 +22,15 @@ use core::cell::Cell;
 pub struct EmptyProcState {}
 
 pub struct ProcessArray {
-    inner: &'static mut [Option<&'static dyn process::ProcessType>],
+    inner: &'static mut [(Option<&'static dyn process::ProcessType>, EmptyProcState)],
     index: Cell<usize>,
     iter_cnt: Cell<usize>,
 }
 
 impl ProcessArray {
-    pub fn new(processes: &'static mut [Option<&'static dyn process::ProcessType>]) -> Self {
+    pub fn new(
+        processes: &'static mut [(Option<&'static dyn process::ProcessType>, EmptyProcState)],
+    ) -> Self {
         Self {
             inner: processes,
             index: Cell::new(0),
@@ -39,11 +41,11 @@ impl ProcessArray {
 
 impl ProcessCollection for ProcessArray {
     fn load_process_with_id(&mut self, proc: Option<&'static dyn ProcessType>, idx: usize) {
-        self.inner[idx] = proc;
+        self.inner[idx] = (proc, EmptyProcState {});
     }
 
     fn get_proc_by_id(&self, process_index: usize) -> Option<&'static dyn ProcessType> {
-        self.inner[process_index]
+        self.inner[process_index].0
     }
 
     // Should only be used by ProcessIter
@@ -54,7 +56,7 @@ impl ProcessCollection for ProcessArray {
             return None;
         }
 
-        while self.inner[idx].is_none() {
+        while self.inner[idx].0.is_none() {
             if idx < self.inner.len() - 1 {
                 idx += 1;
             } else {
@@ -62,7 +64,7 @@ impl ProcessCollection for ProcessArray {
             }
         }
         self.index.set(idx + 1);
-        return self.inner[idx];
+        return self.inner[idx].0;
     }
 
     // Should only be used by ProcessIter
@@ -91,7 +93,7 @@ impl ProcessCollection for ProcessArray {
     fn active(&self) -> usize {
         self.inner
             .iter()
-            .fold(0, |acc, p| if p.is_some() { acc + 1 } else { acc })
+            .fold(0, |acc, p| if p.0.is_some() { acc + 1 } else { acc })
     }
 }
 
@@ -105,11 +107,7 @@ impl PrioritySched {
     const DEFAULT_TIMESLICE_US: u32 = 10000;
     /// Skip re-scheduling a process if its quanta is nearly exhausted
     const MIN_QUANTA_THRESHOLD_US: u32 = 500;
-    pub fn new(
-        kernel: &'static Kernel,
-        _proc_states: &'static [Option<EmptyProcState>],
-        processes: &'static ProcessArray,
-    ) -> PrioritySched {
+    pub fn new(kernel: &'static Kernel, processes: &'static ProcessArray) -> PrioritySched {
         PrioritySched {
             kernel: kernel,
             processes: processes,
@@ -221,7 +219,7 @@ impl Scheduler for PrioritySched {
                 DynamicDeferredCall::call_global_instance_while(|| !chip.has_pending_interrupts());
 
                 for p in self.processes.inner.iter() {
-                    p.map(|process| {
+                    p.0.map(|process| {
                         self.do_process(platform, chip, process, ipc);
                     });
                     if chip.has_pending_interrupts()
