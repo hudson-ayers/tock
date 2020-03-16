@@ -24,6 +24,8 @@ const KERNEL_TICK_DURATION_US: u32 = 10000;
 /// Skip re-scheduling a process if its quanta is nearly exhausted
 const MIN_QUANTA_THRESHOLD_US: u32 = 500;
 
+static mut WASTED: [usize; 30] = [0; 30];
+
 /// Main object for the kernel. Each board will need to create one.
 pub struct Kernel {
     /// How many "to-do" items exist at any given time. These include
@@ -210,6 +212,9 @@ impl Kernel {
         ipc: Option<&ipc::IPC>,
         _capability: &dyn capabilities::MainLoopCapability,
     ) {
+        unsafe {
+            WASTED[1] = 17;
+        }
         loop {
             unsafe {
                 chip.service_pending_interrupts();
