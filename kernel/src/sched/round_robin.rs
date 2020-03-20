@@ -2,6 +2,7 @@
 
 use crate::capabilities;
 use crate::common::dynamic_deferred_call::DynamicDeferredCall;
+use crate::common::list::{List, ListLink, ListNode};
 use crate::debug;
 use crate::ipc;
 use crate::platform::mpu::MPU;
@@ -25,13 +26,24 @@ pub struct RRProcState {
     us_used_this_timeslice: u32,
 }
 
+pub struct ProcessNode {
+    process: Option<&'static dyn ProcessType>,
+    state: RRProcState,
+    next: ListLink<'static, ProcessNode>,
+}
+
+impl ListNode<'static, ProcessNode> for ProcessNode {
+    fn next(&'static self) -> &'static ListLink<'static, ProcessNode> {
+        &self.next
+    }
+}
+
 // Currently relies on assumption that x processes will reside in first x slots of process array
 pub struct RoundRobinSched {
     kernel: &'static Kernel,
     num_procs_installed: usize,
     next_up: Cell<usize>,
-    proc_states: &'static mut [Option<RRProcState>],
-    processes: &'static RRProcessArray,
+    processes: &'static ProcessRWQueues,
 }
 
 impl RoundRobinSched {
@@ -39,12 +51,9 @@ impl RoundRobinSched {
     const DEFAULT_TIMESLICE_US: u32 = 10000;
     /// Skip re-scheduling a process if its quanta is nearly exhausted
     const MIN_QUANTA_THRESHOLD_US: u32 = 500;
-    pub fn new(
-        kernel: &'static Kernel,
-        proc_states: &'static mut [Option<RRProcState>],
-        processes: &'static RRProcessArray,
-    ) -> RoundRobinSched {
+    pub fn new(kernel: &'static Kernel, processes: &'static ProcessRWQueues) -> RoundRobinSched {
         //have to initialize proc state bc default() sets them to None
+        /*
         let mut num_procs = 0;
         for (i, s) in proc_states.iter_mut().enumerate() {
             if processes.processes[i].is_some() {
@@ -52,11 +61,11 @@ impl RoundRobinSched {
                 *s = Some(Default::default());
             }
         }
+        */
         RoundRobinSched {
             kernel: kernel,
-            num_procs_installed: num_procs,
+            num_procs_installed: processes.len(),
             next_up: Cell::new(0),
-            proc_states: proc_states,
             processes: processes,
         }
     }
@@ -111,8 +120,9 @@ impl RoundRobinSched {
                     let us_used = proc_timeslice_us - systick.get_value();
                     systick.enable(false); //disables systick interrupts
                     chip.mpu().disable_mpu();
-                    self.proc_states[appid.idx()]
-                        .as_mut()
+                    let node_ref = self.processes.get_node_ref_by_idx(appid.idx()).unwrap();
+                    node_ref
+                        .state
                         .map(|mut state| state.us_used_this_timeslice += us_used);
                     switch_reason_opt = context_switch_reason;
 
@@ -175,48 +185,77 @@ impl RoundRobinSched {
     }
 }
 
-pub struct RRProcessArray {
-    processes: &'static mut [Option<&'static dyn process::ProcessType>],
+/// Store processes in ready/Wait queues implemented as statically allocated linked lists
+pub struct ProcessRWQueues {
+    processes: &'static mut List<'static, ProcessNode>,
+    num_procs: usize,
     index: Cell<usize>,
     iter_cnt: Cell<usize>,
 }
 
-impl RRProcessArray {
-    pub fn new(processes: &'static mut [Option<&'static dyn process::ProcessType>]) -> Self {
+impl ProcessRWQueues {
+    pub fn new(processes: &'static mut List<'static, ProcessNode>) -> Self {
+        //TODO: Count only active processes instead of all (as count() does)
         Self {
             processes: processes,
+            num_procs: processes.iter().count(),
             index: Cell::new(0),
             iter_cnt: Cell::new(0),
         }
     }
+
+    fn get_node_ref_by_idx(&self, idx: usize) -> Option<&'static ProcessNode> {
+        for node in self.processes.iter() {
+            match node.process {
+                Some(proc) => {
+                    if proc.appid().idx() == idx {
+                        return Some(node);
+                    }
+                }
+                None => {}
+            }
+        }
+        None
+    }
 }
 
-impl ProcessCollection for RRProcessArray {
+impl ProcessCollection for ProcessRWQueues {
     fn load_process_with_id(&mut self, proc: Option<&'static dyn ProcessType>, idx: usize) {
-        self.processes[idx] = proc;
+        let mut i = 0;
+        for &node in self.processes.iter_mut() {
+            if i == idx {
+                node.process = proc;
+                return;
+            } else {
+                i += 1;
+            }
+        }
+        panic!("Failed to load process");
     }
 
     fn get_proc_by_id(&self, process_index: usize) -> Option<&'static dyn ProcessType> {
-        self.processes[process_index]
+        for node in self.processes.iter() {
+            if node.process.appid().idx() == process_index {
+                return node.process;
+            }
+        }
     }
 
     // Should only be used by ProcessIter
     fn next(&self) -> Option<&dyn ProcessType> {
         let mut idx = self.index.get();
-
-        if idx >= self.processes.len() {
-            return None;
-        }
-
-        while self.processes[idx].is_none() {
-            if idx < self.processes.len() - 1 {
-                idx += 1;
+        let mut i = 0;
+        for node in self.processes.iter() {
+            if node.process.is_none() {
+                continue;
+            } else if i == idx {
+                self.index.set(idx + 1);
+                return node.process;
             } else {
-                return None;
+                i += 1;
             }
         }
-        self.index.set(idx + 1);
-        return self.processes[idx];
+        None
     }
 
     // Should only be used by ProcessIter
@@ -239,13 +278,14 @@ impl ProcessCollection for RRProcessArray {
 
     /// Return how many processes this board supports.
     fn len(&self) -> usize {
-        self.processes.len()
+        self.num_procs
     }
 
     fn active(&self) -> usize {
-        self.processes
-            .iter()
-            .fold(0, |acc, p| if p.is_some() { acc + 1 } else { acc })
+        self.processes.iter().fold(
+            0,
+            |acc, node| if node.process.is_some() { acc + 1 } else { acc },
+        )
     }
 }
 
@@ -274,21 +314,23 @@ impl Scheduler for RoundRobinSched {
                     {
                         break;
                     }
-                    self.processes.processes[next].map(|process| {
-                        let timeslice_us = Self::DEFAULT_TIMESLICE_US
-                            - self.proc_states[next].unwrap().us_used_this_timeslice;
+                    let node_ref = self.processes.get_node_ref_by_idx(next); //TODO: get reference to tuple
+                                                                             // should have this as a
+                                                                             // function on List
+                    node_ref.process.map(|process| {
+                        let timeslice_us =
+                            Self::DEFAULT_TIMESLICE_US - node_ref.state.us_used_this_timeslice;
                         let (given_chance, switch_reason) =
                             self.do_process(platform, chip, process, ipc, timeslice_us);
 
                         if given_chance {
                             let mut reschedule = false;
-                            let used_so_far =
-                                self.proc_states[next].unwrap().us_used_this_timeslice;
+                            let used_so_far = node_ref.state.us_used_this_timeslice;
                             if switch_reason == Some(ContextSwitchReason::Interrupted) {
                                 if Self::DEFAULT_TIMESLICE_US - used_so_far
                                     >= Self::MIN_QUANTA_THRESHOLD_US
                                 {
-                                    self.proc_states[next].as_mut().map(|mut state| {
+                                    node_ref.state.as_mut().map(|mut state| {
                                         state.us_used_this_timeslice = used_so_far;
                                     });
                                     reschedule = true; //Was interrupted before using entire timeslice!
@@ -296,7 +338,7 @@ impl Scheduler for RoundRobinSched {
                                 // want to inform scheduler of time passed and to reschedule
                             }
                             if !reschedule {
-                                self.proc_states[next].as_mut().map(|mut state| {
+                                node_ref.state.as_mut().map(|mut state| {
                                     state.us_used_this_timeslice = 0;
                                 });
                                 if next < self.num_procs_installed - 1 {

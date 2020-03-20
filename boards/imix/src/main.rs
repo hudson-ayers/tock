@@ -25,7 +25,7 @@ use kernel::hil::Controller;
 use kernel::Scheduler;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, debug_gpio, static_init};
-use kernel::{PrioritySched, ProcessArray, ProcessCollection, RRProcessArray, RoundRobinSched};
+use kernel::{PrioritySched, ProcessArray, ProcessCollection, ProcessRWQueues, RoundRobinSched};
 
 use components;
 use components::alarm::{AlarmDriverComponent, AlarmMuxComponent};
