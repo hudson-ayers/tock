@@ -114,7 +114,7 @@ impl Kernel {
     }
 
     /// Call after processes have been loaded into the collection.
-    pub fn set_process_collection(&self, processes: &'static dyn ProcessCollection) {
+    pub fn set_proc_collection(&self, processes: &'static dyn ProcessCollection) {
         self.processes.set(processes);
     }
 
