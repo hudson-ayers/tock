@@ -14,22 +14,30 @@ use crate::sched::{ProcessCollection, ProcessIter};
 use crate::syscall::{ContextSwitchReason, Syscall};
 use core::cell::Cell;
 
-// TODO: Not requiring this state to be Copy should be possible and more efficient
-
 /// Stores per process state when using the round robin scheduler
-#[derive(Copy, Clone, Default)]
+#[derive(Default)]
 pub struct RRProcState {
     /// To prevent unfair situations that can be created by one app consistently
     /// scheduling an interrupt, yeilding, and then interrupting the subsequent app
     /// shortly after it begins executing, we track the portion of a timeslice that a process
     /// has used and allow it to continue after being interrupted.
-    us_used_this_timeslice: u32,
+    us_used_this_timeslice: Cell<u32>,
 }
 
 pub struct ProcessNode {
-    process: Option<&'static dyn ProcessType>,
+    process: Cell<Option<&'static dyn ProcessType>>, // required bc List does not have mutable references to Nodes
     state: RRProcState,
     next: ListLink<'static, ProcessNode>,
+}
+
+impl ProcessNode {
+    pub fn new() -> ProcessNode {
+        ProcessNode {
+            process: Cell::new(None),
+            state: RRProcState::default(),
+            next: ListLink::empty(),
+        }
+    }
 }
 
 impl ListNode<'static, ProcessNode> for ProcessNode {
@@ -64,7 +72,7 @@ impl RoundRobinSched {
         */
         RoundRobinSched {
             kernel: kernel,
-            num_procs_installed: processes.len(),
+            num_procs_installed: processes.active(),
             next_up: Cell::new(0),
             processes: processes,
         }
@@ -123,7 +131,8 @@ impl RoundRobinSched {
                     let node_ref = self.processes.get_node_ref_by_idx(appid.idx()).unwrap();
                     node_ref
                         .state
-                        .map(|mut state| state.us_used_this_timeslice += us_used);
+                        .us_used_this_timeslice
+                        .set(node_ref.state.us_used_this_timeslice.get() + us_used);
                     switch_reason_opt = context_switch_reason;
 
                     // Now the process has returned back to the kernel. Check
@@ -195,10 +204,9 @@ pub struct ProcessRWQueues {
 
 impl ProcessRWQueues {
     pub fn new(processes: &'static mut List<'static, ProcessNode>) -> Self {
-        //TODO: Count only active processes instead of all (as count() does)
         Self {
+            num_procs: 0,
             processes: processes,
-            num_procs: processes.iter().count(),
             index: Cell::new(0),
             iter_cnt: Cell::new(0),
         }
@@ -206,7 +214,7 @@ impl ProcessRWQueues {
 
     fn get_node_ref_by_idx(&self, idx: usize) -> Option<&'static ProcessNode> {
         for node in self.processes.iter() {
-            match node.process {
+            match node.process.get() {
                 Some(proc) => {
                     if proc.appid().idx() == idx {
                         return Some(node);
@@ -222,9 +230,10 @@ impl ProcessRWQueues {
 impl ProcessCollection for ProcessRWQueues {
     fn load_process_with_id(&mut self, proc: Option<&'static dyn ProcessType>, idx: usize) {
         let mut i = 0;
-        for &node in self.processes.iter_mut() {
+        for node in self.processes.iter() {
             if i == idx {
-                node.process = proc;
+                node.process.set(proc);
+                self.num_procs += 1;
                 return;
             } else {
                 i += 1;
@@ -234,23 +243,27 @@ impl ProcessCollection for ProcessRWQueues {
     }
 
     fn get_proc_by_id(&self, process_index: usize) -> Option<&'static dyn ProcessType> {
-        for node in self.processes.iter() {
-            if node.process.appid().idx() == process_index {
-                return node.process;
-            }
-        }
+        self.processes
+            .iter()
+            .find(|proc_node| {
+                proc_node
+                    .process
+                    .get()
+                    .map_or(false, |proc| proc.appid().idx() == process_index)
+            })
+            .map_or(None, |node| node.process.get())
     }
 
     // Should only be used by ProcessIter
     fn next(&self) -> Option<&dyn ProcessType> {
-        let mut idx = self.index.get();
+        let idx = self.index.get();
         let mut i = 0;
         for node in self.processes.iter() {
-            if node.process.is_none() {
+            if node.process.get().is_none() {
                 continue;
             } else if i == idx {
                 self.index.set(idx + 1);
-                return node.process;
+                return node.process.get();
             } else {
                 i += 1;
             }
@@ -278,19 +291,23 @@ impl ProcessCollection for ProcessRWQueues {
 
     /// Return how many processes this board supports.
     fn len(&self) -> usize {
-        self.num_procs
+        self.processes.iter().count()
     }
 
     fn active(&self) -> usize {
-        self.processes.iter().fold(
-            0,
-            |acc, node| if node.process.is_some() { acc + 1 } else { acc },
-        )
+        self.processes.iter().fold(0, |acc, node| {
+            if node.process.get().is_some() {
+                acc + 1
+            } else {
+                acc
+            }
+        })
     }
 }
 
 impl Scheduler for RoundRobinSched {
     type ProcessState = RRProcState;
+    type Collection = ProcessRWQueues;
 
     /// Main loop.
     fn kernel_loop<P: Platform, C: Chip>(
@@ -314,33 +331,27 @@ impl Scheduler for RoundRobinSched {
                     {
                         break;
                     }
-                    let node_ref = self.processes.get_node_ref_by_idx(next); //TODO: get reference to tuple
-                                                                             // should have this as a
-                                                                             // function on List
-                    node_ref.process.map(|process| {
-                        let timeslice_us =
-                            Self::DEFAULT_TIMESLICE_US - node_ref.state.us_used_this_timeslice;
+                    let node_ref = self.processes.get_node_ref_by_idx(next).unwrap();
+                    node_ref.process.get().map(|process| {
+                        let timeslice_us = Self::DEFAULT_TIMESLICE_US
+                            - node_ref.state.us_used_this_timeslice.get();
                         let (given_chance, switch_reason) =
                             self.do_process(platform, chip, process, ipc, timeslice_us);
 
                         if given_chance {
                             let mut reschedule = false;
-                            let used_so_far = node_ref.state.us_used_this_timeslice;
+                            let used_so_far = node_ref.state.us_used_this_timeslice.get();
                             if switch_reason == Some(ContextSwitchReason::Interrupted) {
                                 if Self::DEFAULT_TIMESLICE_US - used_so_far
                                     >= Self::MIN_QUANTA_THRESHOLD_US
                                 {
-                                    node_ref.state.as_mut().map(|mut state| {
-                                        state.us_used_this_timeslice = used_so_far;
-                                    });
+                                    node_ref.state.us_used_this_timeslice.set(used_so_far);
                                     reschedule = true; //Was interrupted before using entire timeslice!
                                 }
                                 // want to inform scheduler of time passed and to reschedule
                             }
                             if !reschedule {
-                                node_ref.state.as_mut().map(|mut state| {
-                                    state.us_used_this_timeslice = 0;
-                                });
+                                node_ref.state.us_used_this_timeslice.set(0);
                                 if next < self.num_procs_installed - 1 {
                                     self.next_up.set(next + 1);
                                 } else {

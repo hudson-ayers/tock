@@ -205,6 +205,7 @@ impl PrioritySched {
 
 impl Scheduler for PrioritySched {
     type ProcessState = EmptyProcState;
+    type Collection = ProcessArray;
 
     fn kernel_loop<P: Platform, C: Chip>(
         &'static mut self,

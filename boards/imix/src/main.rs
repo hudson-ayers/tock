@@ -17,6 +17,7 @@ use capsules::virtual_i2c::MuxI2C;
 use capsules::virtual_spi::{MuxSpiMaster, VirtualSpiMasterDevice};
 use kernel::capabilities;
 use kernel::common::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferredCallClientState};
+use kernel::common::List;
 use kernel::component::Component;
 use kernel::hil::radio;
 #[allow(unused_imports)]
@@ -25,7 +26,9 @@ use kernel::hil::Controller;
 use kernel::Scheduler;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, debug_gpio, static_init};
-use kernel::{PrioritySched, ProcessArray, ProcessCollection, ProcessRWQueues, RoundRobinSched};
+use kernel::{
+    PrioritySched, ProcessArray, ProcessCollection, ProcessNode, ProcessRWQueues, RoundRobinSched,
+};
 
 use components;
 use components::alarm::{AlarmDriverComponent, AlarmMuxComponent};
@@ -511,7 +514,19 @@ pub unsafe fn reset_handler() {
         static _sapps: u8;
     }
 
-    type SchedType = PrioritySched;
+    type SchedType = RoundRobinSched;
+
+    let processes = static_init!(List<'static, ProcessNode>, List::new());
+    // TODO: Put below in a macro
+    let proc0 = static_init!(ProcessNode, ProcessNode::new());
+    let proc1 = static_init!(ProcessNode, ProcessNode::new());
+    let proc2 = static_init!(ProcessNode, ProcessNode::new());
+    let proc3 = static_init!(ProcessNode, ProcessNode::new());
+    processes.push_head(proc0);
+    processes.push_head(proc1);
+    processes.push_head(proc2);
+    processes.push_head(proc3);
+    /*
     let processes = static_init!(
         [(
             Option<&'static dyn kernel::procs::ProcessType>,
@@ -519,7 +534,11 @@ pub unsafe fn reset_handler() {
         ); NUM_PROCS],
         Default::default()
     );
-    let process_collection = static_init!(ProcessArray, ProcessArray::new(processes));
+    */
+    let process_collection = static_init!(
+        <SchedType as Scheduler>::Collection,
+        <SchedType as Scheduler>::Collection::new(processes)
+    );
 
     PROCESS_COLLECTION_PTR = Some(process_collection);
 
@@ -532,7 +551,7 @@ pub unsafe fn reset_handler() {
         FAULT_RESPONSE,
         &process_mgmt_cap,
     );
-    board_kernel.set_proc_container(process_collection);
+    board_kernel.set_proc_collection(process_collection);
 
     let scheduler = static_init!(SchedType, SchedType::new(board_kernel, process_collection));
     scheduler.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);

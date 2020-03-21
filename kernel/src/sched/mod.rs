@@ -26,20 +26,7 @@ use tock_cells::optional_cell::OptionalCell;
 
 // Allow different schedulers to store processes in any container
 // they choose (Array, Multiple Queues, etc.)
-// TODO: Also store scheduler-specific ProcessState alongside Process
-//
-// TODO: Is this better than scheduling algorithms just storing queues etc. of appids but leaving
-// process array unchanged? TBD
-//
-// TODO: Container -> Collection
 pub trait ProcessCollection {
-    //type ProcessState; // needs to match ProcessState of Scheduler in use
-    //def want to store State alongside Process, TODO
-
-    //fn as_any(&self) -> &dyn Any; //required so that scheduler can cast to concrete type used
-    //fn new() -> Self; //Needed so static_init!() call doesnt change based on scheduler in use
-    //
-
     /// Load reference to process created with `Process::create` into container
     fn load_process_with_id(&mut self, proc: Option<&'static dyn ProcessType>, idx: usize); //Capability?
 
@@ -81,7 +68,7 @@ impl Drop for ProcessIter {
 
 pub trait Scheduler {
     type ProcessState;
-    //type Container: ProcessCollection;
+    type Collection: ProcessCollection;
     //TODO: Add function called when number of processes on board changes, to future-proof
     //for dynamic loading of apps
 
@@ -126,8 +113,8 @@ impl Kernel {
         }
     }
 
-    /// Call after processes have been loaded into the container.
-    pub fn set_proc_container(&self, processes: &'static dyn ProcessCollection) {
+    /// Call after processes have been loaded into the collection.
+    pub fn set_process_collection(&self, processes: &'static dyn ProcessCollection) {
         self.processes.set(processes);
     }
 
