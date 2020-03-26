@@ -4,11 +4,9 @@
 //! implementations.
 
 //crate mod multilevel_feedback;
+crate mod mlfq;
 crate mod priority;
 crate mod round_robin;
-
-use core::cell::Cell;
-use core::ptr::NonNull;
 
 use crate::callback::{Callback, CallbackId};
 use crate::capabilities;
@@ -16,12 +14,15 @@ use crate::common::cells::NumericCellExt;
 use crate::config;
 use crate::debug;
 use crate::grant::Grant;
+use crate::hil::time;
 use crate::ipc;
 use crate::memop;
 use crate::platform::{Chip, Platform};
 use crate::process::{self, ProcessType, Task};
 use crate::returncode::ReturnCode;
 use crate::syscall::{ContextSwitchReason, Syscall};
+use core::cell::Cell;
+use core::ptr::NonNull;
 use tock_cells::optional_cell::OptionalCell;
 
 // Allow different schedulers to store processes in any container
@@ -67,18 +68,18 @@ impl Drop for ProcessIter {
 }
 
 pub trait Scheduler {
-    type ProcessState;
     type Collection: ProcessCollection;
     //TODO: Add function called when number of processes on board changes, to future-proof
     //for dynamic loading of apps
 
     //TODO: Move new() into this interface?
 
-    fn kernel_loop<P: Platform, C: Chip>(
+    fn kernel_loop<P: Platform, C: Chip, A: time::Alarm<'static>>(
         &'static mut self,
         platform: &P,
         chip: &C,
         ipc: Option<&ipc::IPC>,
+        alarm: &A,
         _capability: &dyn capabilities::MainLoopCapability,
     );
     //fn processes(&self) -> &'static dyn ProcessCollection;

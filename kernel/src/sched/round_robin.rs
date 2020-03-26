@@ -4,6 +4,7 @@ use crate::capabilities;
 use crate::common::dynamic_deferred_call::DynamicDeferredCall;
 use crate::common::list::{List, ListLink, ListNode};
 use crate::debug;
+use crate::hil::time;
 use crate::ipc;
 use crate::platform::mpu::MPU;
 use crate::platform::systick::SysTick;
@@ -14,37 +15,29 @@ use crate::sched::{ProcessCollection, ProcessIter};
 use crate::syscall::{ContextSwitchReason, Syscall};
 use core::cell::Cell;
 
-/// Stores per process state when using the round robin scheduler
-#[derive(Default)]
-pub struct RRProcState {}
-
-pub struct ProcessNode {
+pub struct RRProcessNode {
     process: Cell<Option<&'static dyn ProcessType>>, // required bc List does not have mutable references to Nodes
-    state: RRProcState,
-    next: ListLink<'static, ProcessNode>,
+    next: ListLink<'static, RRProcessNode>,
 }
 
-impl ProcessNode {
-    pub fn new() -> ProcessNode {
-        ProcessNode {
+impl RRProcessNode {
+    pub fn new() -> RRProcessNode {
+        RRProcessNode {
             process: Cell::new(None),
-            state: RRProcState::default(),
             next: ListLink::empty(),
         }
     }
 }
 
-impl ListNode<'static, ProcessNode> for ProcessNode {
-    fn next(&'static self) -> &'static ListLink<'static, ProcessNode> {
+impl ListNode<'static, RRProcessNode> for RRProcessNode {
+    fn next(&'static self) -> &'static ListLink<'static, RRProcessNode> {
         &self.next
     }
 }
 
-// Currently relies on assumption that x processes will reside in first x slots of process array
 pub struct RoundRobinSched {
     kernel: &'static Kernel,
-    num_procs_installed: usize,
-    processes: &'static ProcessRWQueues,
+    processes: &'static ProcessQueue,
 }
 
 impl RoundRobinSched {
@@ -52,10 +45,9 @@ impl RoundRobinSched {
     const DEFAULT_TIMESLICE_US: u32 = 10000;
     /// Skip re-scheduling a process if its quanta is nearly exhausted
     const MIN_QUANTA_THRESHOLD_US: u32 = 500;
-    pub fn new(kernel: &'static Kernel, processes: &'static ProcessRWQueues) -> RoundRobinSched {
+    pub fn new(kernel: &'static Kernel, processes: &'static ProcessQueue) -> RoundRobinSched {
         RoundRobinSched {
             kernel: kernel,
-            num_procs_installed: processes.active(),
             processes: processes,
         }
     }
@@ -163,16 +155,16 @@ impl RoundRobinSched {
     }
 }
 
-/// Store processes in ready/Wait queues implemented as statically allocated linked lists
-pub struct ProcessRWQueues {
-    processes: &'static mut List<'static, ProcessNode>,
+/// Store processes in queues implemented using statically allocated linked list
+pub struct ProcessQueue {
+    processes: &'static mut List<'static, RRProcessNode>,
     num_procs: usize,
     index: Cell<usize>,
     iter_cnt: Cell<usize>,
 }
 
-impl ProcessRWQueues {
-    pub fn new(processes: &'static mut List<'static, ProcessNode>) -> Self {
+impl ProcessQueue {
+    pub fn new(processes: &'static mut List<'static, RRProcessNode>) -> Self {
         Self {
             num_procs: 0,
             processes: processes,
@@ -182,7 +174,7 @@ impl ProcessRWQueues {
     }
 }
 
-impl ProcessCollection for ProcessRWQueues {
+impl ProcessCollection for ProcessQueue {
     fn load_process_with_id(&mut self, proc: Option<&'static dyn ProcessType>, idx: usize) {
         let mut i = 0;
         for node in self.processes.iter() {
@@ -261,15 +253,15 @@ impl ProcessCollection for ProcessRWQueues {
 }
 
 impl Scheduler for RoundRobinSched {
-    type ProcessState = RRProcState;
-    type Collection = ProcessRWQueues;
+    type Collection = ProcessQueue;
 
     /// Main loop.
-    fn kernel_loop<P: Platform, C: Chip>(
+    fn kernel_loop<P: Platform, C: Chip, A: time::Alarm<'static>>(
         &'static mut self,
         platform: &P,
         chip: &C,
         ipc: Option<&ipc::IPC>,
+        _alarm: &A,
         _capability: &dyn capabilities::MainLoopCapability,
     ) {
         let mut reschedule = false;
@@ -282,7 +274,6 @@ impl Scheduler for RoundRobinSched {
                     if chip.has_pending_interrupts()
                         || DynamicDeferredCall::global_instance_calls_pending().unwrap_or(false)
                         || self.kernel.processes_blocked()
-                        || self.num_procs_installed == 0
                     {
                         break;
                     }

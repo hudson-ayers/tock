@@ -7,6 +7,7 @@
 use crate::capabilities;
 use crate::common::dynamic_deferred_call::DynamicDeferredCall;
 use crate::debug;
+use crate::hil::time;
 use crate::ipc;
 use crate::platform::mpu::MPU;
 use crate::platform::systick::SysTick;
@@ -16,21 +17,14 @@ use crate::sched::{Kernel, ProcessCollection, ProcessIter, Scheduler};
 use crate::syscall::{ContextSwitchReason, Syscall};
 use core::cell::Cell;
 
-/// Priority Scheduler requires no additional per-process state
-/// All ProcessState types must implement default
-#[derive(Default)]
-pub struct EmptyProcState {}
-
 pub struct ProcessArray {
-    inner: &'static mut [(Option<&'static dyn process::ProcessType>, EmptyProcState)],
+    inner: &'static mut [Option<&'static dyn process::ProcessType>],
     index: Cell<usize>,
     iter_cnt: Cell<usize>,
 }
 
 impl ProcessArray {
-    pub fn new(
-        processes: &'static mut [(Option<&'static dyn process::ProcessType>, EmptyProcState)],
-    ) -> Self {
+    pub fn new(processes: &'static mut [Option<&'static dyn process::ProcessType>]) -> Self {
         Self {
             inner: processes,
             index: Cell::new(0),
@@ -41,11 +35,11 @@ impl ProcessArray {
 
 impl ProcessCollection for ProcessArray {
     fn load_process_with_id(&mut self, proc: Option<&'static dyn ProcessType>, idx: usize) {
-        self.inner[idx] = (proc, EmptyProcState {});
+        self.inner[idx] = proc;
     }
 
     fn get_proc_by_id(&self, process_index: usize) -> Option<&'static dyn ProcessType> {
-        self.inner[process_index].0
+        self.inner[process_index]
     }
 
     // Should only be used by ProcessIter
@@ -56,7 +50,7 @@ impl ProcessCollection for ProcessArray {
             return None;
         }
 
-        while self.inner[idx].0.is_none() {
+        while self.inner[idx].is_none() {
             if idx < self.inner.len() - 1 {
                 idx += 1;
             } else {
@@ -64,7 +58,7 @@ impl ProcessCollection for ProcessArray {
             }
         }
         self.index.set(idx + 1);
-        return self.inner[idx].0;
+        return self.inner[idx];
     }
 
     // Should only be used by ProcessIter
@@ -93,7 +87,7 @@ impl ProcessCollection for ProcessArray {
     fn active(&self) -> usize {
         self.inner
             .iter()
-            .fold(0, |acc, p| if p.0.is_some() { acc + 1 } else { acc })
+            .fold(0, |acc, p| if p.is_some() { acc + 1 } else { acc })
     }
 }
 
@@ -204,14 +198,14 @@ impl PrioritySched {
 }
 
 impl Scheduler for PrioritySched {
-    type ProcessState = EmptyProcState;
     type Collection = ProcessArray;
 
-    fn kernel_loop<P: Platform, C: Chip>(
+    fn kernel_loop<P: Platform, C: Chip, A: time::Alarm<'static>>(
         &'static mut self,
         platform: &P,
         chip: &C,
         ipc: Option<&ipc::IPC>,
+        _alarm: &A,
         _capability: &dyn capabilities::MainLoopCapability,
     ) {
         loop {
@@ -220,7 +214,7 @@ impl Scheduler for PrioritySched {
                 DynamicDeferredCall::call_global_instance_while(|| !chip.has_pending_interrupts());
 
                 for p in self.processes.inner.iter() {
-                    p.0.map(|process| {
+                    p.map(|process| {
                         self.do_process(platform, chip, process, ipc);
                     });
                     if chip.has_pending_interrupts()

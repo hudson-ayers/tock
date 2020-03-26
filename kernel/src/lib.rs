@@ -42,9 +42,9 @@ pub use crate::platform::systick::SysTick;
 pub use crate::platform::{mpu, Chip, Platform};
 pub use crate::platform::{ClockInterface, NoClockControl, NO_CLOCK_CONTROL};
 pub use crate::returncode::ReturnCode;
-//pub use crate::sched::multilevel_feedback::MultiFeedbackSched;
+pub use crate::sched::mlfq::{MLFQProcessNode, MLFQSched, ProcessMultiQueues};
 pub use crate::sched::priority::{PrioritySched, ProcessArray};
-pub use crate::sched::round_robin::{ProcessNode, ProcessRWQueues, RoundRobinSched};
+pub use crate::sched::round_robin::{ProcessQueue, RRProcessNode, RoundRobinSched};
 pub use crate::sched::{Kernel, ProcessCollection, Scheduler};
 
 // Export only select items from the process module. To remove the name conflict

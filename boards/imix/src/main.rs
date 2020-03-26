@@ -27,7 +27,8 @@ use kernel::Scheduler;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, debug_gpio, static_init};
 use kernel::{
-    PrioritySched, ProcessArray, ProcessCollection, ProcessNode, ProcessRWQueues, RoundRobinSched,
+    MLFQProcessNode, MLFQSched, PrioritySched, ProcessArray, ProcessCollection, ProcessMultiQueues,
+    ProcessQueue, RRProcessNode, RoundRobinSched,
 };
 
 use components;
@@ -514,24 +515,40 @@ pub unsafe fn reset_handler() {
         static _sapps: u8;
     }
 
-    type SchedType = RoundRobinSched;
+    type SchedType = MLFQSched;
+    // MLFQ init
+    let processes: [&'static mut List<'static, MLFQProcessNode>; ProcessMultiQueues::NUM_QUEUES] = [
+        static_init!(List<'static, MLFQProcessNode>, List::new()),
+        static_init!(List<'static, MLFQProcessNode>, List::new()),
+        static_init!(List<'static, MLFQProcessNode>, List::new()),
+    ];
 
-    let processes = static_init!(List<'static, ProcessNode>, List::new());
     // TODO: Put below in a macro
-    let proc0 = static_init!(ProcessNode, ProcessNode::new());
-    let proc1 = static_init!(ProcessNode, ProcessNode::new());
-    let proc2 = static_init!(ProcessNode, ProcessNode::new());
-    let proc3 = static_init!(ProcessNode, ProcessNode::new());
+    let proc0 = static_init!(MLFQProcessNode, MLFQProcessNode::new());
+    let proc1 = static_init!(MLFQProcessNode, MLFQProcessNode::new());
+    let proc2 = static_init!(MLFQProcessNode, MLFQProcessNode::new());
+    let proc3 = static_init!(MLFQProcessNode, MLFQProcessNode::new());
+    processes[0].push_head(proc0);
+    processes[0].push_head(proc1);
+    processes[0].push_head(proc2);
+    processes[0].push_head(proc3);
+    /*
+     // Round Robin init
+    let processes = static_init!(List<'static, RRProcessNode>, List::new());
+    // TODO: Put below in a macro
+    let proc0 = static_init!(RRProcessNode, RRProcessNode::new());
+    let proc1 = static_init!(RRProcessNode, RRProcessNode::new());
+    let proc2 = static_init!(RRProcessNode, RRProcessNode::new());
+    let proc3 = static_init!(RRProcessNode, RRProcessNode::new());
     processes.push_head(proc0);
     processes.push_head(proc1);
     processes.push_head(proc2);
     processes.push_head(proc3);
+    */
     /*
+    // Priority Init
     let processes = static_init!(
-        [(
-            Option<&'static dyn kernel::procs::ProcessType>,
-            <SchedType as Scheduler>::ProcessState
-        ); NUM_PROCS],
+        [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS],
         Default::default()
     );
     */
@@ -553,6 +570,10 @@ pub unsafe fn reset_handler() {
     );
     board_kernel.set_proc_collection(process_collection);
 
+    let sched_alarm = static_init!(
+        capsules::virtual_alarm::VirtualMuxAlarm<'static, sam4l::ast::Ast<'static>>,
+        capsules::virtual_alarm::VirtualMuxAlarm::new(mux_alarm)
+    );
     let scheduler = static_init!(SchedType, SchedType::new(board_kernel, process_collection));
-    scheduler.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);
+    scheduler.kernel_loop(&imix, chip, Some(&imix.ipc), sched_alarm, &main_cap);
 }
