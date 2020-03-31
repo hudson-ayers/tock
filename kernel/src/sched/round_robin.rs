@@ -1,4 +1,12 @@
 //! Round Robin Scheduler for Tock
+//! This scheduler is specifically a Round Robin Scheduler with Interrupts.
+//! When hardware interrupts occur while a userspace process is executing,
+//! this scheduler executes the top half of the interrupt,
+//! and then stops executing the userspace process immediately and handles the bottom
+//! half of the interrupt. This design decision was made to mimic the behavior of the
+//! original Tock scheduler. In order to ensure fair use of timeslices, when
+//! userspace processes are interrupted the systick is paused, and the same process
+//! is resumed with the same systick value from when it was interrupted.
 
 use crate::callback::AppId;
 use crate::capabilities;
@@ -12,8 +20,9 @@ use crate::process;
 use crate::sched::{Kernel, Scheduler};
 use crate::syscall::{ContextSwitchReason, Syscall};
 
+/// A node in the linked list the scheduler uses to track processes
 pub struct RRProcessNode<'a> {
-    appid: AppId, // TODO: need to add back Cell here?
+    appid: AppId,
     next: ListLink<'a, RRProcessNode<'a>>,
 }
 
@@ -32,6 +41,7 @@ impl<'a> ListNode<'a, RRProcessNode<'a>> for RRProcessNode<'a> {
     }
 }
 
+/// Round Robin Scheduler
 pub struct RoundRobinSched<'a> {
     kernel: &'static Kernel,
     pub processes: List<'a, RRProcessNode<'a>>,
@@ -49,6 +59,9 @@ impl<'a> RoundRobinSched<'a> {
         }
     }
 
+    /// Executes a process with a timeslice of DEFAULT_TIMESLICE_US -- unless the caller
+    /// indicates that this process is being rescheduled after being interrupted, in which
+    /// case the process is executed with the timeslice remaining when it was interrupted.
     unsafe fn do_process<P: Platform, C: Chip>(
         &self,
         platform: &P,
@@ -109,7 +122,7 @@ impl<'a> RoundRobinSched<'a> {
                             break;
                         }
                         Some(ContextSwitchReason::Interrupted) => {
-                            // break to handle other processes
+                            // break to handle the bottom half of the interrupt
                             break;
                         }
                         _ => {}

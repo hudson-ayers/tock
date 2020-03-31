@@ -1,4 +1,4 @@
-//! Implementation of the Tock scheduler that existed prior to this PR. This scheduler has
+//! Implementation of the original Tock scheduler. This scheduler has
 //! significant flaws -- higher priority apps with specific interrupt timings can indefinitely
 //! starve lower priority apps, for example -- but leaving this in to show it is still possible
 //! and to allow for testing that seperates out whether any breaking changes that result are

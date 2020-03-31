@@ -1,4 +1,4 @@
-//! Tock core scheduler. Defines the central Kernel struct and a trait that
+//! Defines the central Kernel struct and a trait that
 //! different scheduler implementations must implement. Also defines several
 //! utility functions to reduce repeated code between different scheduler
 //! implementations.
@@ -23,7 +23,9 @@ use crate::process::{self, Task};
 use crate::returncode::ReturnCode;
 use crate::syscall::{ContextSwitchReason, Syscall};
 
+/// Trait which any scheduler must implement.
 pub trait Scheduler {
+    /// This function should be the last call in main.rs and should never return.
     fn kernel_loop<P: Platform, C: Chip>(
         &mut self,
         platform: &P,
