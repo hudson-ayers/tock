@@ -6,6 +6,7 @@
 #![no_std]
 #![no_main]
 #![feature(in_band_lifetimes)]
+#![feature(const_in_array_repeat_expressions)]
 #![deny(missing_docs)]
 
 mod imix_components;
@@ -23,10 +24,7 @@ use kernel::hil::radio;
 use kernel::hil::radio::{RadioConfig, RadioData};
 use kernel::hil::Controller;
 #[allow(unused_imports)]
-use kernel::{create_capability, debug, debug_gpio, static_init};
-use kernel::{
-    MLFQProcessNode, MLFQSched, PrioritySched, RRProcessNode, RoundRobinSched, Scheduler,
-};
+use kernel::{create_capability, debug, debug_gpio, static_init, Scheduler};
 
 use components;
 use components::alarm::{AlarmDriverComponent, AlarmMuxComponent};
@@ -525,62 +523,13 @@ pub unsafe fn reset_handler() {
         &process_mgmt_cap,
     );
 
-    //type SchedType = RoundRobinSched;
-
-    /*
-    let mut scheduler = PrioritySched::new(board_kernel, &PROCESSES);
-    */
-    /*
-    let sched_alarm = static_init!(
-        capsules::virtual_alarm::VirtualMuxAlarm<'static, sam4l::ast::Ast<'static>>,
-        capsules::virtual_alarm::VirtualMuxAlarm::new(mux_alarm)
-    );
-    let mut scheduler = MLFQSched::new(board_kernel, sched_alarm);
-
-    //NEXT: Put below into macro/component. If it can't be done, need to use static_init?
-    let proc0: MLFQProcessNode;
-    let proc1: MLFQProcessNode;
-    let proc2: MLFQProcessNode;
-    let proc3: MLFQProcessNode;
-    if PROCESSES[0].is_some() {
-        proc0 = MLFQProcessNode::new(PROCESSES[0].unwrap().appid());
-        scheduler.processes[0].push_head(&proc0);
-    }
-    if PROCESSES[1].is_some() {
-        proc1 = MLFQProcessNode::new(PROCESSES[1].unwrap().appid());
-        scheduler.processes[0].push_head(&proc1);
-    }
-    if PROCESSES[2].is_some() {
-        proc2 = MLFQProcessNode::new(PROCESSES[2].unwrap().appid());
-        scheduler.processes[0].push_head(&proc2);
-    }
-    if PROCESSES[3].is_some() {
-        proc3 = MLFQProcessNode::new(PROCESSES[3].unwrap().appid());
-        scheduler.processes[0].push_head(&proc3);
-    }
-    */
-    let mut scheduler = RoundRobinSched::new(board_kernel);
-
-    //NEXT: Put below into macro/component. If it can't be done, need to use static_init?
-    let proc0: RRProcessNode;
-    let proc1: RRProcessNode;
-    let proc2: RRProcessNode;
-    let proc3: RRProcessNode;
-    if PROCESSES[0].is_some() {
-        proc0 = RRProcessNode::new(PROCESSES[0].unwrap().appid());
-        scheduler.processes.push_head(&proc0);
-    }
-    if PROCESSES[1].is_some() {
-        proc1 = RRProcessNode::new(PROCESSES[1].unwrap().appid());
-        scheduler.processes.push_head(&proc1);
-    }
-    if PROCESSES[2].is_some() {
-        proc2 = RRProcessNode::new(PROCESSES[2].unwrap().appid());
-        scheduler.processes.push_head(&proc2);
-    }
-    if PROCESSES[3].is_some() {
-        proc3 = RRProcessNode::new(PROCESSES[3].unwrap().appid());
-        scheduler.processes.push_head(&proc3);
-    }
+    /*let scheduler =
+    components::priority::PriorityComponent::new(board_kernel, &PROCESSES).finalize(());*/
+    let scheduler = components::round_robin::RoundRobinComponent::new(board_kernel, &PROCESSES)
+        .finalize(components::rr_component_helper!(NUM_PROCS));
+    /*let scheduler =
+    components::mlfq::MLFQComponent::new(board_kernel, mux_alarm, &PROCESSES).finalize(
+        components::mlfq_component_helper!(sam4l::ast::Ast, NUM_PROCS),
+    );*/
     scheduler.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);
 }
