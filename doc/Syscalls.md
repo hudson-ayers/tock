@@ -132,7 +132,8 @@ the process will not execute again until another callback re-schedules the
 process.
 
 If a process has enqueued callbacks waiting to execute when Yield is called, the
-process immediately re-enters the Running state and the first callback runs.
+process immediately re-enters the Running state and the first callback runs, unless
+the scheduler chooses to prioritize some other operation first.
 
 ```rust
 yield()
@@ -378,7 +379,7 @@ well as the return address (`ra`) register.
 
 After a system call is made, Tock routes the call to the appropriate driver.
 
-First, in [`sched.rs`](../kernel/src/sched.rs) the number of the `svc` is
+First, in [`sched/mod.rs`](../kernel/src/sched/mod.rs) the number of the `svc` is
 matched against the valid syscall types. `yield` and `memop` have special
 functionality that is handled by the kernel. `command`, `subscribe`, and
 `allow` are routed to drivers for handling.
