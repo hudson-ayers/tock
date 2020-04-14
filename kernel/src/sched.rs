@@ -24,8 +24,20 @@ const KERNEL_TICK_DURATION_US: u32 = 10000;
 /// Skip re-scheduling a process if its quanta is nearly exhausted
 const MIN_QUANTA_THRESHOLD_US: u32 = 500;
 
+pub trait Scheduler {}
+
+pub struct RoundRobin {}
+pub struct Priority {}
+
+impl Scheduler for RoundRobin {}
+impl Scheduler for Priority {}
+
+#[cfg(feature = "round_robin")]
+type DefaultSched = RoundRobin;
+#[cfg(feature = "priority")]
+type DefaultSched = Priority;
 /// Main object for the kernel. Each board will need to create one.
-pub struct Kernel {
+pub struct Kernel<S: Scheduler = DefaultSched> {
     /// How many "to-do" items exist at any given time. These include
     /// outstanding callbacks and processes in the Running state.
     work: Cell<usize>,
@@ -47,6 +59,8 @@ pub struct Kernel {
     /// created and the data structures for grants have already been
     /// established.
     grants_finalized: Cell<bool>,
+
+    scheduler: S,
 }
 
 impl Kernel {
@@ -57,6 +71,7 @@ impl Kernel {
             process_identifier_max: Cell::new(0),
             grant_counter: Cell::new(0),
             grants_finalized: Cell::new(false),
+            scheduler: RoundRobin {},
         }
     }
 

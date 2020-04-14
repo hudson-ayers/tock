@@ -135,6 +135,8 @@ ifneq (,$(findstring thumb,$(TARGET)))
   OBJDUMP_FLAGS += --arch-name=thumb
 endif
 
+export CHIP=Sam4l
+
 # Dump configuration for verbose builds
 ifneq ($(V),)
   $(info )
