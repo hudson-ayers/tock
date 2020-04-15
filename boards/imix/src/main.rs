@@ -523,10 +523,12 @@ pub unsafe fn reset_handler() {
         &process_mgmt_cap,
     );
 
-    /*let scheduler =
-    components::priority::PriorityComponent::new(board_kernel, &PROCESSES).finalize(());*/
     let scheduler = components::round_robin::RoundRobinComponent::new(board_kernel, &PROCESSES)
         .finalize(components::rr_component_helper!(NUM_PROCS));
+    /*let scheduler =
+    components::priority::PriorityComponent::new(board_kernel, &PROCESSES).finalize(());*/
+    /*let scheduler = components::cooperative::CooperativeComponent::new(board_kernel, &PROCESSES)
+    .finalize(components::coop_component_helper!(NUM_PROCS));*/
     /*let scheduler =
     components::mlfq::MLFQComponent::new(board_kernel, mux_alarm, &PROCESSES).finalize(
         components::mlfq_component_helper!(sam4l::ast::Ast, NUM_PROCS),

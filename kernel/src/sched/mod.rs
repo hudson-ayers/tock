@@ -3,6 +3,7 @@
 //! utility functions to reduce repeated code between different scheduler
 //! implementations.
 
+crate mod cooperative;
 crate mod mlfq;
 crate mod priority;
 crate mod round_robin;

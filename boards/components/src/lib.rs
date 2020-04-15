@@ -9,6 +9,7 @@ pub mod button;
 
 pub mod alarm;
 pub mod console;
+pub mod cooperative;
 pub mod crc;
 pub mod debug_queue;
 pub mod debug_writer;

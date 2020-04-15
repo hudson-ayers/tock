@@ -47,6 +47,7 @@ pub use crate::platform::systick::SysTick;
 pub use crate::platform::{mpu, Chip, Platform};
 pub use crate::platform::{ClockInterface, NoClockControl, NO_CLOCK_CONTROL};
 pub use crate::returncode::ReturnCode;
+pub use crate::sched::cooperative::{CoopProcessNode, CooperativeSched};
 pub use crate::sched::mlfq::{MLFQProcessNode, MLFQSched};
 pub use crate::sched::priority::PrioritySched;
 pub use crate::sched::round_robin::{RRProcessNode, RoundRobinSched};
