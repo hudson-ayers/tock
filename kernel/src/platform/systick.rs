@@ -62,8 +62,7 @@ impl SysTick for () {
     }
 
     fn get_value(&self) -> u32 {
-        //TODO: really this needs to always return whatever was passed to set_timer
-        50
+        10000 // this is a hack, basically just a value larger than the MIN_QUANTA_THRESHOLD is expected to be
     }
 
     fn greater_than(&self, _: u32) -> bool {
