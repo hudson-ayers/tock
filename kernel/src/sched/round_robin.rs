@@ -62,6 +62,7 @@ impl<'a> RoundRobinSched<'a> {
     /// Executes a process with a timeslice of DEFAULT_TIMESLICE_US -- unless the caller
     /// indicates that this process is being rescheduled after being interrupted, in which
     /// case the process is executed with the timeslice remaining when it was interrupted.
+    /// Returns true if the process exited because of being interrupted.
     unsafe fn do_process<P: Platform, C: Chip>(
         &self,
         platform: &P,
@@ -69,25 +70,20 @@ impl<'a> RoundRobinSched<'a> {
         process: &dyn process::ProcessType,
         ipc: Option<&crate::ipc::IPC>,
         rescheduled: bool,
-    ) -> Option<ContextSwitchReason> {
+    ) -> bool {
         let systick = chip.systick();
-        let mut remaining = 0;
 
         if !rescheduled {
             systick.reset();
             systick.set_timer(Self::DEFAULT_TIMESLICE_US);
-            systick.enable(false);
-        } else {
-            systick.enable(false); // just resume from when interrupted
         }
-        let mut switch_reason_opt = None;
+        systick.enable(false); //resumes counting down
 
         loop {
             if chip.has_pending_interrupts() {
                 break;
             }
             if systick.overflowed() || !systick.greater_than(Self::MIN_QUANTA_THRESHOLD_US) {
-                switch_reason_opt = Some(ContextSwitchReason::TimesliceExpired);
                 process.debug_timeslice_expired();
                 break;
             }
@@ -101,10 +97,8 @@ impl<'a> RoundRobinSched<'a> {
                     chip.mpu().enable_mpu();
                     systick.enable(true); //Enables systick interrupts
                     let context_switch_reason = process.switch_to();
-                    remaining = systick.get_value();
                     systick.enable(false); //disables systick interrupts
                     chip.mpu().disable_mpu();
-                    switch_reason_opt = context_switch_reason;
 
                     // Now the process has returned back to the kernel. Check
                     // why and handle the process as appropriate.
@@ -123,7 +117,8 @@ impl<'a> RoundRobinSched<'a> {
                         }
                         Some(ContextSwitchReason::Interrupted) => {
                             // break to handle the bottom half of the interrupt
-                            break;
+                            systick.pause(); // stop counting down
+                            return true;
                         }
                         _ => {}
                     }
@@ -156,11 +151,7 @@ impl<'a> RoundRobinSched<'a> {
                 }
             }
         }
-        if switch_reason_opt == Some(ContextSwitchReason::Interrupted) {
-            systick.reset(); // stop counting down
-            systick.set_timer(remaining); // store remaining time in systick register
-        }
-        switch_reason_opt
+        false
     }
 }
 
@@ -190,9 +181,8 @@ impl<'a> Scheduler for RoundRobinSched<'a> {
                     let last_rescheduled = reschedule;
                     reschedule = false;
                     self.kernel.process_map_or((), next, |process| {
-                        let switch_reason =
+                        reschedule =
                             self.do_process(platform, chip, process, ipc, last_rescheduled);
-                        reschedule = switch_reason == Some(ContextSwitchReason::Interrupted);
                     });
                     if !reschedule {
                         self.processes.push_tail(self.processes.pop_head().unwrap());

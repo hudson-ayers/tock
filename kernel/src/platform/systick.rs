@@ -32,6 +32,9 @@ pub trait SysTick {
     /// Resets the timer to 0 and disables it
     fn reset(&self);
 
+    /// Pauses the timer
+    fn pause(&self);
+
     /// Enables the timer
     ///
     /// Enabling the timer will begin a count down from the value set with
@@ -47,6 +50,8 @@ pub trait SysTick {
 /// interrupt non-yielding processes.
 impl SysTick for () {
     fn reset(&self) {}
+
+    fn pause(&self) {}
 
     fn set_timer(&self, _: u32) {}
 

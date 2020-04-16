@@ -133,9 +133,10 @@ impl kernel::SysTick for SysTick {
     }
 
     fn get_value(&self) -> u32 {
-        let tics = SYSTICK_BASE.syst_cvr.read(CurrentValue::CURRENT) as u64;
-        let hertz = self.hertz() as u64;
-        (tics * 1_000_000 / hertz) as u32
+        let tics = SYSTICK_BASE.syst_cvr.read(CurrentValue::CURRENT);
+        //let hertz = self.hertz();
+        //tics * 1_000_000 / hertz
+        tics
     }
 
     fn overflowed(&self) -> bool {
@@ -146,6 +147,12 @@ impl kernel::SysTick for SysTick {
         SYSTICK_BASE.syst_csr.set(0);
         SYSTICK_BASE.syst_rvr.set(0);
         SYSTICK_BASE.syst_cvr.set(0);
+    }
+
+    fn pause(&self) {
+        SYSTICK_BASE
+            .syst_csr
+            .write(ControlAndStatus::ENABLE::CLEAR + ControlAndStatus::CLKSOURCE::SET);
     }
 
     fn enable(&self, with_interrupt: bool) {

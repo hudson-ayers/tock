@@ -147,6 +147,7 @@ impl<'a> Scheduler for CooperativeSched<'a> {
                         break;
                     }
                     let next = self.processes.head().unwrap().appid;
+                    reschedule = false;
                     self.kernel.process_map_or((), next, |process| {
                         reschedule = self.do_process(platform, chip, process, ipc);
                     });
