@@ -243,5 +243,6 @@ impl<'a> gpio::ClientWithValue for Button<'a> {
         if interrupt_count.get() == 0 {
             self.pins[pin_num as usize].0.disable_interrupts();
         }
+        kernel::dwt::start_timer();
     }
 }

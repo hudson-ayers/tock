@@ -1488,7 +1488,7 @@ impl<C: 'static + Chip> Process<'a, C> {
             // Provide the app with plenty of initial process accessible memory.
             let initial_kernel_memory_size =
                 grant_ptrs_offset + callbacks_offset + process_struct_offset;
-            let initial_app_memory_size = 3 * 1024;
+            let initial_app_memory_size = 512;
 
             if min_app_ram_size < initial_app_memory_size {
                 min_app_ram_size = initial_app_memory_size;

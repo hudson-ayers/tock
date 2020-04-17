@@ -116,7 +116,6 @@ impl<'a> RoundRobinSched<'a> {
                             break;
                         }
                         Some(ContextSwitchReason::Interrupted) => {
-                            // break to handle the bottom half of the interrupt
                             systick.pause(); // stop counting down
                             return true;
                         }

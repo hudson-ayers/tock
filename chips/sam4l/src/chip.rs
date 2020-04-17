@@ -184,6 +184,16 @@ impl Chip for Sam4l {
     }
 
     fn sleep(&self) {
+        unsafe {
+            use kernel::debug;
+            let started = kernel::dwt::get_time() > 0;
+            if started {
+                kernel::dwt::stop_timer();
+                debug!("time: {}", kernel::dwt::get_time());
+                kernel::dwt::reset_timer();
+            }
+        }
+        /*
         if pm::deep_sleep_ready() {
             unsafe {
                 cortexm4::scb::set_sleepdeep();
@@ -196,7 +206,7 @@ impl Chip for Sam4l {
 
         unsafe {
             cortexm4::support::wfi();
-        }
+        }*/
     }
 
     unsafe fn atomic<F, R>(&self, f: F) -> R

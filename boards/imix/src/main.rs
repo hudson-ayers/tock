@@ -89,7 +89,7 @@ mod linear_log_test;
 
 // State for loading apps.
 
-const NUM_PROCS: usize = 4;
+const NUM_PROCS: usize = 20;
 
 // Constants related to the configuration of the 15.4 network stack
 // TODO: Notably, the radio MAC addresses can be configured from userland at the moment
@@ -533,5 +533,6 @@ pub unsafe fn reset_handler() {
     components::mlfq::MLFQComponent::new(board_kernel, mux_alarm, &PROCESSES).finalize(
         components::mlfq_component_helper!(sam4l::ast::Ast, NUM_PROCS),
     );*/
+    kernel::dwt::reset_timer();
     scheduler.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);
 }
