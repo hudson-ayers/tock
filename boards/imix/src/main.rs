@@ -8,7 +8,7 @@
 #![feature(in_band_lifetimes)]
 #![deny(missing_docs)]
 
-mod imix_components;
+       mod imix_components;
 use capsules::alarm::AlarmDriver;
 use capsules::net::ieee802154::MacAddress;
 use capsules::net::ipv6::ip_utils::IPAddr;
