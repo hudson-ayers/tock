@@ -1,4 +1,4 @@
-//! Board file for Imix development platform.
+//! Board file for Imix development platform
 //!
 //! - <https://github.com/tock/tock/tree/master/boards/imix>
 //! - <https://github.com/tock/imix>
