@@ -46,11 +46,6 @@ jobs:
       - name: debug-support-targets
         run: make ci-debug-support-targets
 
-  build-artifacts:
-    runs-on: ubuntu-latest
-    needs: build
-
-    steps:
       - name: collect-build-artifacts
         run: make ci-collect-artifacts
       - name: upload-build-artifacts
