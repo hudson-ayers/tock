@@ -219,6 +219,7 @@ ci-collect-artifacts:
 	@for f in $$(find ./target -iname '*.bin' | grep -E "release/.*\.bin"); do mkdir -p "ci-artifacts/$$(dirname $$f)"; cp "$$f" "ci-artifacts/$$f"; done
 
 .PHONY: emulation-setup
+emulation-setup: SHELL:=/usr/bin/env bash
 emulation-setup:
 	@#Use the latest QEMU as it has OpenTitan support
 	@if [[ ! -d tools/qemu || ! -f tools/qemu/VERSION ]]; then \
