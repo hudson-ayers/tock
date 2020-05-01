@@ -217,3 +217,21 @@ ci-collect-artifacts:
 	@mkdir -p ./ci-artifacts
 	@rm -rf "./ci-artifacts/*"
 	@for f in $$(find ./target -iname '*.bin' | grep -E "release/.*\.bin"); do mkdir -p "ci-artifacts/$$(dirname $$f)"; cp "$$f" "ci-artifacts/$$f"; done
+
+.PHONY: emulation-setup
+emulation-setup:
+	@#Use the latest QEMU as it has OpenTitan support
+	@if [[ ! -d tools/qemu || ! -f tools/qemu/VERSION ]]; then \
+		rm -rf tools/qemu; \
+		cd tools; git clone https://github.com/qemu/qemu.git; \
+		cd qemu; ./configure --target-list=riscv32-softmmu; \
+	fi
+	@$(MAKE) -C "tools/qemu" > /dev/null
+
+.PHONY: emulation-check
+emulation-check: emulation-setup
+	@$(MAKE) -C "boards/hifive1"
+	$(eval TMPFILE := $(shell mktemp))
+	@PATH="${PATH}:../../tools/qemu/riscv32-softmmu/" timeout --foreground 10s $(MAKE) qemu -C "boards/hifive1" | tee $(TMPFILE) > /dev/null
+	grep "Entering main loop" $(TMPFILE) > /dev/null;
+	rm "$(TMPFILE)"
