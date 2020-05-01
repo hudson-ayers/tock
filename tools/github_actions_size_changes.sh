@@ -37,7 +37,7 @@ for elf in $(find . -maxdepth 8 | grep 'release' | egrep '\.elf$' | grep -v 'ris
     b=${tmp%.elf}
     # Print a detailed by raw line-by-line diff. Can be useful to
     # understand where the size differences come from.
-    git diff --no-index previous-benchmark-${b} current-benchmark-${b}
+    git diff --no-index previous-benchmark-${b} current-benchmark-${b} || true #Supress exit code
     # Compute a summary suitable for GitHub.
     ./tools/diff_memory_usage.py previous-benchmark-${b} current-benchmark-${b} size-diffs-${b}.txt ${b}
     if [ -s "size-diffs-${b}.txt" ]; then
