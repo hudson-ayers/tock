@@ -38,12 +38,21 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
+
       - name: syntax
         run: make ci-syntax
       - name: compilation
         run: make ci-compilation
       - name: debug-support-targets
         run: make ci-debug-support-targets
+
+      - name: collect-build-artifacts
+        run: make ci-collect-artifacts
+      - name: upload-build-artifacts
+        uses: actions/upload-artifacts@v2
+        with:
+          name: build-artifacts
+          path: ci-artifacts
 
   tests:
     runs-on: ubuntu-latest
