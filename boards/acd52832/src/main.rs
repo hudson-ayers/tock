@@ -64,7 +64,7 @@ pub struct Platform {
     led: &'static capsules::led::LED<'static>,
     rng: &'static capsules::rng::RngDriver<'static>,
     temp: &'static capsules::temperature::TemperatureSensor<'static>,
-    ipc: kernel::ipc::IPC,
+    ipc: kernel::ipc::IPC<NUM_PROCS>,
     alarm: &'static capsules::alarm::AlarmDriver<
         'static,
         VirtualMuxAlarm<'static, nrf52832::rtc::Rtc<'static>>,

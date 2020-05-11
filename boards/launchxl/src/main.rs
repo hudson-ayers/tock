@@ -63,7 +63,7 @@ pub struct Platform {
     >,
     rng: &'static capsules::rng::RngDriver<'static>,
     i2c_master: &'static capsules::i2c_master::I2CMasterDriver<cc26x2::i2c::I2CMaster<'static>>,
-    ipc: kernel::ipc::IPC,
+    ipc: kernel::ipc::IPC<NUM_PROCS>,
 }
 
 impl kernel::Platform for Platform {

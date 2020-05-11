@@ -285,11 +285,11 @@ impl Kernel {
     }
 
     /// Main loop.
-    pub fn kernel_loop<P: Platform, C: Chip>(
+    pub fn kernel_loop<P: Platform, C: Chip, const NUM_PROCS: usize>(
         &'static self,
         platform: &P,
         chip: &C,
-        ipc: Option<&ipc::IPC>,
+        ipc: Option<&ipc::IPC<NUM_PROCS>>,
         _capability: &dyn capabilities::MainLoopCapability,
     ) {
         loop {
@@ -320,12 +320,12 @@ impl Kernel {
         }
     }
 
-    unsafe fn do_process<P: Platform, C: Chip>(
+    unsafe fn do_process<P: Platform, C: Chip, const NUM_PROCS: usize>(
         &self,
         platform: &P,
         chip: &C,
         process: &dyn process::ProcessType,
-        ipc: Option<&crate::ipc::IPC>,
+        ipc: Option<&crate::ipc::IPC<NUM_PROCS>>,
     ) {
         let systick = chip.systick();
         systick.reset();

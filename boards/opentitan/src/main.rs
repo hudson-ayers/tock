@@ -19,11 +19,14 @@ use rv32i::csr;
 mod aes_test;
 
 pub mod io;
+
+const NUM_PROCS: usize = 4;
+
 //
 // Actual memory for holding the active process structures. Need an empty list
 // at least.
-static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; 4] =
-    [None, None, None, None];
+static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] =
+    [None; NUM_PROCS];
 
 static mut CHIP: Option<&'static ibex::chip::Ibex> = None;
 
@@ -252,5 +255,10 @@ pub unsafe fn reset_handler() {
         debug!("{:?}", err);
     });
 
-    board_kernel.kernel_loop(&opentitan, chip, None, &main_loop_cap);
+    board_kernel.kernel_loop(
+        &opentitan,
+        chip,
+        None::<&kernel::ipc::IPC<NUM_PROCS>>,
+        &main_loop_cap,
+    );
 }

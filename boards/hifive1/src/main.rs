@@ -22,11 +22,14 @@ use kernel::{create_capability, debug, static_init};
 use rv32i::csr;
 
 pub mod io;
+
+const NUM_PROCS: usize = 4;
+
 //
 // Actual memory for holding the active process structures. Need an empty list
 // at least.
-static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; 4] =
-    [None, None, None, None];
+static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] =
+    [None; NUM_PROCS];
 
 // Reference to the chip for panic dumps.
 static mut CHIP: Option<&'static e310x::chip::E310x> = None;
@@ -215,5 +218,10 @@ pub unsafe fn reset_handler() {
         debug!("{:?}", err);
     });
 
-    board_kernel.kernel_loop(&hifive1, chip, None, &main_loop_cap);
+    board_kernel.kernel_loop(
+        &hifive1,
+        chip,
+        None::<&kernel::ipc::IPC<NUM_PROCS>>,
+        &main_loop_cap,
+    );
 }

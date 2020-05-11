@@ -94,7 +94,7 @@ pub struct Platform {
     led: &'static capsules::led::LED<'static>,
     rng: &'static capsules::rng::RngDriver<'static>,
     temp: &'static capsules::temperature::TemperatureSensor<'static>,
-    ipc: kernel::ipc::IPC,
+    ipc: kernel::ipc::IPC<NUM_PROCS>,
     analog_comparator:
         &'static capsules::analog_comparator::AnalogComparator<'static, nrf52::acomp::Comparator>,
     alarm: &'static capsules::alarm::AlarmDriver<

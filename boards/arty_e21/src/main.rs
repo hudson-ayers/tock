@@ -51,7 +51,7 @@ struct ArtyE21 {
     >,
     led: &'static capsules::led::LED<'static>,
     button: &'static capsules::button::Button<'static>,
-    // ipc: kernel::ipc::IPC,
+    // ipc: kernel::ipc::IPC<NUM_PROCS>,
 }
 
 /// Mapping of integer syscalls to objects that implement syscalls.

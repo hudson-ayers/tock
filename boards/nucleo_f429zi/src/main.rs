@@ -49,7 +49,7 @@ pub static mut STACK_MEMORY: [u8; 0x1000] = [0; 0x1000];
 /// capsules for this platform.
 struct NucleoF429ZI {
     console: &'static capsules::console::Console<'static>,
-    ipc: kernel::ipc::IPC,
+    ipc: kernel::ipc::IPC<NUM_PROCS>,
     led: &'static capsules::led::LED<'static>,
     button: &'static capsules::button::Button<'static>,
     alarm: &'static capsules::alarm::AlarmDriver<

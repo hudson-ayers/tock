@@ -9,12 +9,15 @@
 #![feature(
     core_intrinsics,
     const_fn,
+    const_generics,
     panic_info_message,
     in_band_lifetimes,
     crate_visibility_modifier,
     associated_type_defaults,
-    try_trait
+    try_trait,
+    const_in_array_repeat_expressions
 )]
+#![allow(incomplete_features)]
 #![warn(unreachable_pub)]
 #![no_std]
 
