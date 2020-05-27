@@ -15,7 +15,6 @@ on:
 # If you add additional jobs, remember to add them to bors.toml
 jobs:
   ci-format:
-        name: format
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -37,7 +36,6 @@ jobs:
         run: make ci-job-markdown-toc
 
   ci-build:
-        name: build
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -63,7 +61,6 @@ jobs:
           path: ci-artifacts
 
   ci-tests:
-        name: tests
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
@@ -84,7 +81,6 @@ jobs:
         run: make ci-job-tools
 
   ci-qemu:
-    name: qemu
     runs-on: ubuntu-latest
 
     steps:
