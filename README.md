@@ -1,6 +1,9 @@
 # ![TockOS](http://www.tockos.org/assets/img/tock.svg "TockOS Logo")
 
-[![Build Status](https://travis-ci.org/tock/tock.svg?branch=master)](https://travis-ci.org/tock/tock)
+[![Formatting](https://github.com/tock/tock/workflows/format/badge.svg)](https://github.com/tock/tock/actions?query=branch%3Amaster)
+[![Build](https://github.com/tock/tock/workflows/build/badge.svg)](https://github.com/tock/tock/actions?query=branch%3Amaster)
+[![Unit Tests](https://github.com/tock/tock/workflows/testing/badge.svg)](https://github.com/tock/tock/actions?query=branch%3Amaster)
+[![Emulation](https://github.com/tock/tock/workflows/qemu/badge.svg)](https://github.com/tock/tock/actions?query=branch%3Amaster)
 [![slack](https://img.shields.io/badge/slack-tockos-informational)][slack]
 
 Tock is an embedded operating system designed for running multiple concurrent, mutually
