@@ -21,6 +21,7 @@ pub mod mx25r6435f;
 pub mod ninedof;
 pub mod nonvolatile_storage;
 pub mod nrf51822;
+pub mod nrf52_components;
 pub mod panic_button;
 pub mod process_console;
 pub mod rng;

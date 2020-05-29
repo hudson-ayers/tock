@@ -1,11 +1,13 @@
 [package]
-name = "components"
+name = "nrf52dk"
 version = "0.1.0"
 authors = ["Tock Project Developers <tock-dev@googlegroups.com>"]
+build = "build.rs"
 edition = "2018"
 
 [dependencies]
+components = { path = "../components" }
+cortexm4 = { path = "../../arch/cortex-m4" }
 capsules = { path = "../../capsules" }
 kernel = { path = "../../kernel" }
-nrf52 = { path = "../../chips/nrf52" }
-cortexm4 = { path = "../../arch/cortex-m4" }
+nrf52832 = { path = "../../chips/nrf52832" }

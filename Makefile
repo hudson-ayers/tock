@@ -180,9 +180,9 @@ ci-debug-support-targets:
 	@printf "$$(tput bold)*****************************$$(tput sgr0)\n"
 	@printf "$$(tput bold)* CI: Debug Support Targets *$$(tput sgr0)\n"
 	@printf "$$(tput bold)*****************************$$(tput sgr0)\n"
-	@CI=true $(MAKE) -C boards/nordic/nrf52dk lst
-	@CI=true $(MAKE) -C boards/nordic/nrf52dk debug
-	@CI=true $(MAKE) -C boards/nordic/nrf52dk debug-lst
+	@CI=true $(MAKE) -C boards/nrf52dk lst
+	@CI=true $(MAKE) -C boards/nrf52dk debug
+	@CI=true $(MAKE) -C boards/nrf52dk debug-lst
 
 .PHONY: ci-documentation
 ci-documentation:

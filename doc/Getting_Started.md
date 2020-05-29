@@ -110,7 +110,7 @@ package manager (pip).
 Tock builds a unique kernel for every _board_ it supports. Boards include
 details like pulling together the correct chips and pin assignments. To
 build a kernel, first choose a board, then navigate to that board directory.
-e.g. `cd boards/nordic/nrf52840dk ; make`.
+e.g. `cd boards/nrf52840dk ; make`.
 
 Some boards have special build options that can only be used within the board's
 directory.  All boards share a few common targets:
