@@ -24,6 +24,12 @@ const KERNEL_TICK_DURATION_US: u32 = 10000;
 /// Skip re-scheduling a process if its quanta is nearly exhausted
 const MIN_QUANTA_THRESHOLD_US: u32 = 500;
 
+/// Trait which any scheduler must implement.
+pub trait Scheduler {
+    fn dispatcher(&self) -> Option<&'static dyn process::ProcessType>;
+    fn finalizer(&self);
+}
+
 /// Main object for the kernel. Each board will need to create one.
 pub struct Kernel {
     /// How many "to-do" items exist at any given time. These include
@@ -285,37 +291,20 @@ impl Kernel {
     }
 
     /// Main loop.
-    pub fn kernel_loop<P: Platform, C: Chip>(
+    pub fn kernel_loop<P: Platform, C: Chip, S: Scheduler>(
         &'static self,
         platform: &P,
         chip: &C,
+        scheduler: &S,
         ipc: Option<&ipc::IPC>,
         _capability: &dyn capabilities::MainLoopCapability,
     ) {
         loop {
             unsafe {
-                chip.service_pending_interrupts();
-                DynamicDeferredCall::call_global_instance_while(|| !chip.has_pending_interrupts());
-
-                for p in self.processes.iter() {
-                    p.map(|process| {
-                        self.do_process(platform, chip, process, ipc);
-                    });
-                    if chip.has_pending_interrupts()
-                        || DynamicDeferredCall::global_instance_calls_pending().unwrap_or(false)
-                    {
-                        break;
-                    }
-                }
-
-                chip.atomic(|| {
-                    if !chip.has_pending_interrupts()
-                        && !DynamicDeferredCall::global_instance_calls_pending().unwrap_or(false)
-                        && self.processes_blocked()
-                    {
-                        chip.sleep();
-                    }
+                scheduler.dispatcher().map(|process| {
+                    self.do_process(platform, chip, process, ipc);
                 });
+                scheduler.finalizer();
             };
         }
     }
