@@ -58,7 +58,12 @@ pub trait I2CMaster {
     fn write_read(&self, addr: u8, data: &'static mut [u8], write_len: u8, read_len: u8);
     fn write(&self, addr: u8, data: &'static mut [u8], len: u8);
     fn read(&self, addr: u8, buffer: &'static mut [u8], len: u8);
+}
 
+/// Interface for an SMBus Master hardware driver.
+/// The device implementing this will also seperately implement
+/// I2CMaster.
+pub trait SMBusMaster: I2CMaster {
     /// Write data then read data via the I2C Master device in an SMBus
     /// compatible way.
     ///
@@ -73,16 +78,13 @@ pub trait I2CMaster {
     /// data: The buffer to write the data from and read back to
     /// write_len: The length of the write operation
     /// read_len: The length of the read operation
-    #[allow(unused_variables)]
     fn smbus_write_read(
         &self,
         addr: u8,
         data: &'static mut [u8],
         write_len: u8,
         read_len: u8,
-    ) -> Result<(), (Error, &'static mut [u8])> {
-        Err((Error::NotSupported, data))
-    }
+    ) -> Result<(), (Error, &'static mut [u8])>;
 
     /// Write data via the I2C Master device in an SMBus compatible way.
     ///
@@ -95,15 +97,12 @@ pub trait I2CMaster {
     /// addr: The address of the device to write to
     /// data: The buffer to write the data from
     /// len: The length of the operation
-    #[allow(unused_variables)]
     fn smbus_write(
         &self,
         addr: u8,
         data: &'static mut [u8],
         len: u8,
-    ) -> Result<(), (Error, &'static mut [u8])> {
-        Err((Error::NotSupported, data))
-    }
+    ) -> Result<(), (Error, &'static mut [u8])>;
 
     /// Read data via the I2C Master device in an SMBus compatible way.
     ///
@@ -116,15 +115,12 @@ pub trait I2CMaster {
     /// addr: The address of the device to read from
     /// buffer: The buffer to store the data to
     /// len: The length of the operation
-    #[allow(unused_variables)]
     fn smbus_read(
         &self,
         addr: u8,
         buffer: &'static mut [u8],
         len: u8,
-    ) -> Result<(), (Error, &'static mut [u8])> {
-        Err((Error::NotSupported, buffer))
-    }
+    ) -> Result<(), (Error, &'static mut [u8])>;
 }
 
 /// Interface for an I2C Slave hardware driver.
@@ -199,15 +195,12 @@ pub trait SMBusDevice: I2CDevice {
     /// data: The buffer to write the data from and read back to
     /// write_len: The length of the write operation
     /// read_len: The length of the read operation
-    #[allow(unused_variables)]
     fn smbus_write_read(
         &self,
         data: &'static mut [u8],
         write_len: u8,
         read_len: u8,
-    ) -> Result<(), (Error, &'static mut [u8])> {
-        Err((Error::NotSupported, data))
-    }
+    ) -> Result<(), (Error, &'static mut [u8])>;
 
     /// Write data to a slave device in an SMBus compatible way.
     ///
@@ -219,14 +212,11 @@ pub trait SMBusDevice: I2CDevice {
     ///
     /// data: The buffer to write the data from
     /// len: The length of the operation
-    #[allow(unused_variables)]
     fn smbus_write(
         &self,
         data: &'static mut [u8],
         len: u8,
-    ) -> Result<(), (Error, &'static mut [u8])> {
-        Err((Error::NotSupported, data))
-    }
+    ) -> Result<(), (Error, &'static mut [u8])>;
 
     /// Read data from a slave device in an SMBus compatible way.
     ///
@@ -243,9 +233,7 @@ pub trait SMBusDevice: I2CDevice {
         &self,
         buffer: &'static mut [u8],
         len: u8,
-    ) -> Result<(), (Error, &'static mut [u8])> {
-        Err((Error::NotSupported, buffer))
-    }
+    ) -> Result<(), (Error, &'static mut [u8])>;
 }
 
 /// Client interface for I2CDevice implementations.

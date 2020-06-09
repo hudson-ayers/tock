@@ -310,7 +310,7 @@ pub unsafe fn reset_handler() {
     // # I2C and I2C Sensors
     let mux_i2c = static_init!(
         MuxI2C<'static>,
-        MuxI2C::new(&sam4l::i2c::I2C2, dynamic_deferred_caller)
+        MuxI2C::new(&sam4l::i2c::I2C2, None, dynamic_deferred_caller)
     );
     sam4l::i2c::I2C2.set_master_client(mux_i2c);
 

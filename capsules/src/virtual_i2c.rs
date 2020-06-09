@@ -13,6 +13,7 @@ use kernel::hil::i2c::{self, Error, I2CClient, I2CHwMasterClient};
 
 pub struct MuxI2C<'a> {
     i2c: &'a dyn i2c::I2CMaster,
+    smbus: Option<&'a dyn i2c::SMBusMaster>,
     i2c_devices: List<'a, I2CDevice<'a>>,
     smbus_devices: List<'a, SMBusDevice<'a>>,
     enabled: Cell<usize>,
@@ -40,10 +41,12 @@ impl I2CHwMasterClient for MuxI2C<'_> {
 impl<'a> MuxI2C<'a> {
     pub const fn new(
         i2c: &'a dyn i2c::I2CMaster,
+        smbus: Option<&'a dyn i2c::SMBusMaster>,
         deferred_caller: &'a DynamicDeferredCall,
     ) -> MuxI2C<'a> {
         MuxI2C {
             i2c: i2c,
+            smbus: smbus,
             i2c_devices: List::new(),
             smbus_devices: List::new(),
             enabled: Cell::new(0),
@@ -101,7 +104,7 @@ impl<'a> MuxI2C<'a> {
                 self.i2c_inflight.set(node);
             });
 
-            if self.i2c_inflight.is_none() {
+            if self.i2c_inflight.is_none() && self.smbus.is_some() {
                 // No I2C operation in flight, try SMBus next
                 let mnode = self
                     .smbus_devices
@@ -110,7 +113,7 @@ impl<'a> MuxI2C<'a> {
                 mnode.map(|node| {
                     node.buffer.take().map(|buf| match node.operation.get() {
                         Op::Write(len) => {
-                            match self.i2c.smbus_write(node.addr, buf, len) {
+                            match self.smbus.unwrap().smbus_write(node.addr, buf, len) {
                                 Ok(_) => {}
                                 Err(e) => {
                                     node.buffer.replace(e.1);
@@ -120,7 +123,7 @@ impl<'a> MuxI2C<'a> {
                             };
                         }
                         Op::Read(len) => {
-                            match self.i2c.smbus_read(node.addr, buf, len) {
+                            match self.smbus.unwrap().smbus_read(node.addr, buf, len) {
                                 Ok(_) => {}
                                 Err(e) => {
                                     node.buffer.replace(e.1);
@@ -130,7 +133,11 @@ impl<'a> MuxI2C<'a> {
                             };
                         }
                         Op::WriteRead(wlen, rlen) => {
-                            match self.i2c.smbus_write_read(node.addr, buf, wlen, rlen) {
+                            match self
+                                .smbus
+                                .unwrap()
+                                .smbus_write_read(node.addr, buf, wlen, rlen)
+                            {
                                 Ok(_) => {}
                                 Err(e) => {
                                     node.buffer.replace(e.1);

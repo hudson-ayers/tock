@@ -73,7 +73,7 @@ impl Component for I2CMuxComponent {
         let mux_i2c = static_init_half!(
             static_buffer,
             MuxI2C<'static>,
-            MuxI2C::new(self.i2c, self.deferred_caller)
+            MuxI2C::new(self.i2c, None, self.deferred_caller)
         );
 
         mux_i2c.initialize_callback_handle(
