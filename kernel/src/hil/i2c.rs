@@ -174,66 +174,12 @@ pub trait I2CHwSlaveClient {
 /// address. It gives an interface for communicating with a specific I2C
 /// device.
 pub trait I2CDevice {
+    fn is_smbus(&self) -> bool;
     fn enable(&self);
     fn disable(&self);
     fn write_read(&self, data: &'static mut [u8], write_len: u8, read_len: u8);
     fn write(&self, data: &'static mut [u8], len: u8);
     fn read(&self, buffer: &'static mut [u8], len: u8);
-}
-
-pub trait SMBusDevice: I2CDevice {
-    /// Write data then read data to a slave device in an SMBus
-    /// compatible way.
-    ///
-    /// This function will use the I2C master to write data to a device and
-    /// then read data from the device in a SMBus compatible way. This will be
-    /// a best effort attempt to match the SMBus specification based on what
-    /// the hardware can support.
-    /// This function is expected to make any hardware changes required to
-    /// support SMBus and then revert those changes to support future I2C.
-    ///
-    /// data: The buffer to write the data from and read back to
-    /// write_len: The length of the write operation
-    /// read_len: The length of the read operation
-    fn smbus_write_read(
-        &self,
-        data: &'static mut [u8],
-        write_len: u8,
-        read_len: u8,
-    ) -> Result<(), (Error, &'static mut [u8])>;
-
-    /// Write data to a slave device in an SMBus compatible way.
-    ///
-    /// This function will use the I2C master to write data to a device in a
-    /// SMBus compatible way. This will be a best effort attempt to match the
-    /// SMBus specification based on what the hardware can support.
-    /// This function is expected to make any hardware changes required to
-    /// support SMBus and then revert those changes to support future I2C.
-    ///
-    /// data: The buffer to write the data from
-    /// len: The length of the operation
-    fn smbus_write(
-        &self,
-        data: &'static mut [u8],
-        len: u8,
-    ) -> Result<(), (Error, &'static mut [u8])>;
-
-    /// Read data from a slave device in an SMBus compatible way.
-    ///
-    /// This function will use the I2C master to read data from a device in a
-    /// SMBus compatible way. This will be a best effort attempt to match the
-    /// SMBus specification based on what the hardware can support.
-    /// This function is expected to make any hardware changes required to
-    /// support SMBus and then revert those changes to support future I2C.
-    ///
-    /// buffer: The buffer to store the data to
-    /// len: The length of the operation
-    #[allow(unused_variables)]
-    fn smbus_read(
-        &self,
-        buffer: &'static mut [u8],
-        len: u8,
-    ) -> Result<(), (Error, &'static mut [u8])>;
 }
 
 /// Client interface for I2CDevice implementations.

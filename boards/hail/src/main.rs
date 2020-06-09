@@ -254,7 +254,7 @@ pub unsafe fn reset_handler() {
 
     let sensors_i2c = static_init!(
         MuxI2C<'static>,
-        MuxI2C::new(&sam4l::i2c::I2C1, dynamic_deferred_caller)
+        MuxI2C::new(&sam4l::i2c::I2C1, None, dynamic_deferred_caller)
     );
     sam4l::i2c::I2C1.set_master_client(sensors_i2c);
 
@@ -275,7 +275,7 @@ pub unsafe fn reset_handler() {
         .finalize(components::alarm_component_helper!(sam4l::ast::Ast));
 
     // FXOS8700CQ accelerometer, device address 0x1e
-    let fxos8700_i2c = static_init!(I2CDevice, I2CDevice::new(sensors_i2c, 0x1e));
+    let fxos8700_i2c = static_init!(I2CDevice, I2CDevice::new(sensors_i2c, 0x1e, false));
     let fxos8700 = static_init!(
         capsules::fxos8700cq::Fxos8700cq<'static>,
         capsules::fxos8700cq::Fxos8700cq::new(

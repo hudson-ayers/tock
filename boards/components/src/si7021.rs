@@ -72,7 +72,10 @@ impl<A: 'static + time::Alarm<'static>> Component for SI7021Component<A> {
     type Output = &'static SI7021<'static, VirtualMuxAlarm<'static, A>>;
 
     unsafe fn finalize(self, static_buffer: Self::StaticInput) -> Self::Output {
-        let si7021_i2c = static_init!(I2CDevice, I2CDevice::new(self.i2c_mux, self.i2c_address));
+        let si7021_i2c = static_init!(
+            I2CDevice,
+            I2CDevice::new(self.i2c_mux, self.i2c_address, false)
+        );
         let si7021_alarm = static_init_half!(
             static_buffer.0,
             VirtualMuxAlarm<'static, A>,

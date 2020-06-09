@@ -105,7 +105,7 @@ impl Component for I2CComponent {
         let i2c_device = static_init_half!(
             static_buffer,
             I2CDevice<'static>,
-            I2CDevice::new(self.i2c_mux, self.address)
+            I2CDevice::new(self.i2c_mux, self.address, false)
         );
 
         i2c_device

@@ -54,7 +54,7 @@ impl Component for Fxos8700Component {
     type Output = &'static fxos8700cq::Fxos8700cq<'static>;
 
     unsafe fn finalize(self, _s: Self::StaticInput) -> Self::Output {
-        let fxos8700_i2c = static_init!(I2CDevice, I2CDevice::new(self.i2c_mux, 0x1e));
+        let fxos8700_i2c = static_init!(I2CDevice, I2CDevice::new(self.i2c_mux, 0x1e, false));
         let fxos8700 = static_init!(
             fxos8700cq::Fxos8700cq<'static>,
             fxos8700cq::Fxos8700cq::new(fxos8700_i2c, self.gpio, &mut fxos8700cq::BUF)
@@ -90,7 +90,7 @@ impl Component for NineDofComponent {
     type Output = &'static NineDof<'static>;
 
     unsafe fn finalize(self, _s: Self::StaticInput) -> Self::Output {
-        let fxos8700_i2c = static_init!(I2CDevice, I2CDevice::new(self.i2c_mux, 0x1e));
+        let fxos8700_i2c = static_init!(I2CDevice, I2CDevice::new(self.i2c_mux, 0x1e, false));
         let fxos8700 = static_init!(
             fxos8700cq::Fxos8700cq<'static>,
             fxos8700cq::Fxos8700cq::new(fxos8700_i2c, self.gpio, &mut fxos8700cq::BUF)

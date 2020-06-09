@@ -282,7 +282,7 @@ pub unsafe fn reset_handler() {
     // Create shared mux for the I2C bus
     let i2c_mux = static_init!(
         capsules::virtual_i2c::MuxI2C<'static>,
-        capsules::virtual_i2c::MuxI2C::new(&nrf52832::i2c::TWIM0, dynamic_deferred_caller)
+        capsules::virtual_i2c::MuxI2C::new(&nrf52832::i2c::TWIM0, None, dynamic_deferred_caller)
     );
     nrf52832::i2c::TWIM0.configure(
         nrf52832::pinmux::Pinmux::new(21),
@@ -303,7 +303,7 @@ pub unsafe fn reset_handler() {
     .finalize();
     let mcp23017_i2c = static_init!(
         capsules::virtual_i2c::I2CDevice,
-        capsules::virtual_i2c::I2CDevice::new(i2c_mux, 0x40)
+        capsules::virtual_i2c::I2CDevice::new(i2c_mux, 0x40, false)
     );
     let mcp23017 = static_init!(
         capsules::mcp230xx::MCP230xx<'static>,
