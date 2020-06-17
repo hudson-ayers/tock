@@ -7,8 +7,7 @@ use tock_registers::registers::{
 };
 
 /// Read/Write registers.
-pub struct ReadWriteRiscvCsr<T: IntLike, R: RegisterLongName = ()> {
-    value: usize,
+pub struct ReadWriteRiscvCsr<T: IntLike, R: RegisterLongName = (), const V: usize> {
     associated_register: PhantomData<R>,
     associated_length: PhantomData<T>,
 }
@@ -22,10 +21,9 @@ pub struct ReadWriteRiscvCsr<T: IntLike, R: RegisterLongName = ()> {
 //value: T,
 //associated_register: PhantomData<R>}
 
-impl<T: IntLike, R: RegisterLongName> ReadWriteRiscvCsr<T, R> {
-    pub const fn new(value: usize) -> Self {
+impl<T: IntLike, R: RegisterLongName, const V: usize> ReadWriteRiscvCsr<T, R, { V }> {
+    pub const fn new(_unused: usize) -> Self {
         ReadWriteRiscvCsr {
-            value: value,
             associated_register: PhantomData,
             associated_length: PhantomData,
         }
@@ -35,14 +33,14 @@ impl<T: IntLike, R: RegisterLongName> ReadWriteRiscvCsr<T, R> {
     #[inline]
     pub fn get(&self) -> T {
         let r: T;
-        unsafe { llvm_asm!("csrr $0, $1" : "=r"(r) : "i"(self.value) :: "volatile") }
+        unsafe { llvm_asm!("csrr $0, $1" : "=r"(r) : "i"(V) :: "volatile") }
         r
     }
 
     #[cfg(all(target_arch = "riscv32", target_os = "none"))]
     #[inline]
     pub fn set(&self, val_to_set: T) {
-        unsafe { llvm_asm!("csrw $0, $1" :: "i"(self.value), "r"(val_to_set) :: "volatile") }
+        unsafe { llvm_asm!("csrw $0, $1" :: "i"(V), "r"(val_to_set) :: "volatile") }
     }
 
     // Mock implementations for tests on Travis-CI.
