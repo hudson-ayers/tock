@@ -329,8 +329,7 @@ impl Kernel {
     ) {
         let systick = chip.systick();
         systick.reset();
-        systick.set_timer(KERNEL_TICK_DURATION_US);
-        systick.enable(false);
+        systick.start_timer(KERNEL_TICK_DURATION_US);
 
         loop {
             if chip.has_pending_interrupts()
@@ -351,9 +350,9 @@ impl Kernel {
                     // the process.
                     process.setup_mpu();
                     chip.mpu().enable_mpu();
-                    systick.enable(true);
+                    systick.config_interrupts(true);
                     let context_switch_reason = process.switch_to();
-                    systick.enable(false);
+                    systick.config_interrupts(false);
                     chip.mpu().disable_mpu();
 
                     // Now the process has returned back to the kernel. Check

@@ -6,6 +6,7 @@ use core::hint::unreachable_unchecked;
 use kernel;
 use kernel::common::registers::FieldValue;
 use kernel::debug;
+use kernel::hil::time::Alarm;
 use kernel::Chip;
 use rv32i::csr::{mcause, mie::mie, mip::mip, mtvec::mtvec, CSR};
 use rv32i::syscall::SysCall;
@@ -21,16 +22,18 @@ use crate::usbdev;
 
 pub const CHIP_FREQ: u32 = 50_000_000;
 
-pub struct Ibex {
+pub struct Ibex<A: 'static + Alarm<'static>> {
     userspace_kernel_boundary: SysCall,
     pmp: rv32i::pmp::PMPConfig,
+    systick: kernel::VirtualSystick<A>,
 }
 
-impl Ibex {
-    pub unsafe fn new() -> Ibex {
-        Ibex {
+impl<A: 'static + Alarm<'static>> Ibex<A> {
+    pub unsafe fn new(alarm: &'static A) -> Self {
+        Self {
             userspace_kernel_boundary: SysCall::new(),
             pmp: rv32i::pmp::PMPConfig::new(4),
+            systick: kernel::VirtualSystick::new(alarm), //TODO: Make Optional
         }
     }
 
@@ -103,17 +106,17 @@ impl Ibex {
     }
 }
 
-impl kernel::Chip for Ibex {
+impl<A: 'static + Alarm<'static>> kernel::Chip for Ibex<A> {
     type MPU = rv32i::pmp::PMPConfig;
     type UserspaceKernelBoundary = SysCall;
-    type SysTick = ();
+    type SysTick = kernel::VirtualSystick<A>;
 
     fn mpu(&self) -> &Self::MPU {
         &self.pmp
     }
 
     fn systick(&self) -> &Self::SysTick {
-        &()
+        &self.systick
     }
 
     fn userspace_kernel_boundary(&self) -> &SysCall {

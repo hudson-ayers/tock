@@ -29,7 +29,8 @@ pub mod usb;
 static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; 4] =
     [None, None, None, None];
 
-static mut CHIP: Option<&'static ibex::chip::Ibex> = None;
+static mut CHIP: Option<&'static ibex::chip::Ibex<VirtualMuxAlarm<'static, ibex::timer::RvTimer>>> =
+    None;
 
 // How should the kernel respond when a process faults.
 const FAULT_RESPONSE: kernel::procs::FaultResponse = kernel::procs::FaultResponse::Panic;
@@ -129,17 +130,6 @@ pub unsafe fn reset_handler() {
         None,
     );
 
-    let chip = static_init!(ibex::chip::Ibex, ibex::chip::Ibex::new());
-    CHIP = Some(chip);
-
-    // Need to enable all interrupts for Tock Kernel
-    chip.enable_plic_interrupts();
-    // enable interrupts globally
-    csr::CSR
-        .mie
-        .modify(csr::mie::mie::msoft::SET + csr::mie::mie::mtimer::SET + csr::mie::mie::mext::SET);
-    csr::CSR.mstatus.modify(csr::mstatus::mstatus::mie::SET);
-
     // Create a shared UART channel for the console and for kernel debug.
     let uart_mux = components::console::UartMuxComponent::new(
         &ibex::uart::UART0,
@@ -219,6 +209,10 @@ pub unsafe fn reset_handler() {
         VirtualMuxAlarm<'static, ibex::timer::RvTimer>,
         VirtualMuxAlarm::new(mux_alarm)
     );
+    let systick_virtual_alarm = static_init!(
+        VirtualMuxAlarm<'static, ibex::timer::RvTimer>,
+        VirtualMuxAlarm::new(mux_alarm)
+    );
     let alarm = static_init!(
         capsules::alarm::AlarmDriver<'static, VirtualMuxAlarm<'static, ibex::timer::RvTimer>>,
         capsules::alarm::AlarmDriver::new(
@@ -227,6 +221,20 @@ pub unsafe fn reset_handler() {
         )
     );
     hil::time::Alarm::set_client(virtual_alarm_user, alarm);
+
+    let chip = static_init!(
+        ibex::chip::Ibex<VirtualMuxAlarm<'static, ibex::timer::RvTimer>>,
+        ibex::chip::Ibex::new(systick_virtual_alarm)
+    );
+    CHIP = Some(chip);
+
+    // Need to enable all interrupts for Tock Kernel
+    chip.enable_plic_interrupts();
+    // enable interrupts globally
+    csr::CSR
+        .mie
+        .modify(csr::mie::mie::msoft::SET + csr::mie::mie::mtimer::SET + csr::mie::mie::mext::SET);
+    csr::CSR.mstatus.modify(csr::mstatus::mstatus::mie::SET);
 
     // Setup the console.
     let console = components::console::ConsoleComponent::new(board_kernel, uart_mux).finalize(());

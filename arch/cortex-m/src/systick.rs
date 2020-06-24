@@ -97,7 +97,7 @@ impl SysTick {
 }
 
 impl kernel::SysTick for SysTick {
-    fn set_timer(&self, us: u32) {
+    fn start_timer(&self, us: u32) {
         let reload = {
             // We need to convert from microseconds to native tics, which could overflow in 32-bit
             // arithmetic. So we convert to 64-bit. 64-bit division is an expensive subroutine, but
@@ -114,6 +114,9 @@ impl kernel::SysTick for SysTick {
             .syst_rvr
             .write(ReloadValue::RELOAD.val(reload as u32));
         SYSTICK_BASE.syst_cvr.set(0);
+        SYSTICK_BASE
+            .syst_csr
+            .write(ControlAndStatus::ENABLE::SET + ControlAndStatus::CLKSOURCE::SET);
     }
 
     fn greater_than(&self, us: u32) -> bool {
@@ -142,17 +145,13 @@ impl kernel::SysTick for SysTick {
         SYSTICK_BASE.syst_cvr.set(0);
     }
 
-    fn enable(&self, with_interrupt: bool) {
-        if with_interrupt {
-            SYSTICK_BASE.syst_csr.write(
-                ControlAndStatus::ENABLE::SET
-                    + ControlAndStatus::TICKINT::SET
-                    + ControlAndStatus::CLKSOURCE::SET,
-            );
+    fn config_interrupts(&self, enabled: bool) {
+        if enabled {
+            SYSTICK_BASE.syst_csr.modify(ControlAndStatus::TICKINT::SET);
         } else {
             SYSTICK_BASE
                 .syst_csr
-                .write(ControlAndStatus::ENABLE::SET + ControlAndStatus::CLKSOURCE::SET);
+                .modify(ControlAndStatus::TICKINT::CLEAR);
         }
     }
 }

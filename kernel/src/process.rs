@@ -16,6 +16,7 @@ use crate::debug;
 use crate::ipc;
 use crate::mem::{AppSlice, Shared};
 use crate::platform::mpu::{self, MPU};
+use crate::platform::systick::SysTick;
 use crate::platform::Chip;
 use crate::returncode::ReturnCode;
 use crate::sched::Kernel;
@@ -1248,7 +1249,7 @@ impl<C: Chip> ProcessType for Process<'_, C> {
             return None;
         }
 
-        let switch_reason = self.stored_state.map(|stored_state| {
+        let mut switch_reason = self.stored_state.map(|stored_state| {
             let (stack_pointer, switch_reason) = self
                 .chip
                 .userspace_kernel_boundary()
@@ -1256,6 +1257,15 @@ impl<C: Chip> ProcessType for Process<'_, C> {
             self.current_stack_pointer.set(stack_pointer as *const u8);
             switch_reason
         });
+
+        if switch_reason == Some(syscall::ContextSwitchReason::Interrupted) {
+            // check if the interrupt was actually a systick expiration. We do this here
+            // because systick is chip-specific, not architecture specific, so
+            // Systick handling does not belong in the architecture specific switch_to_process()
+            if self.chip.systick().overflowed() {
+                switch_reason = Some(syscall::ContextSwitchReason::TimesliceExpired);
+            }
+        }
 
         // Update debug state as needed after running this process.
         self.debug.map(|debug| {
