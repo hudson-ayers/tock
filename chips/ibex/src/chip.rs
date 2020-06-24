@@ -33,7 +33,7 @@ impl<A: 'static + Alarm<'static>> Ibex<A> {
         Self {
             userspace_kernel_boundary: SysCall::new(),
             pmp: rv32i::pmp::PMPConfig::new(4),
-            systick: kernel::VirtualSystick::new(alarm), //TODO: Make Optional
+            systick: kernel::VirtualSystick::new(alarm),
         }
     }
 

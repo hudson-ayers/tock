@@ -14,6 +14,8 @@ use kernel::common::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferred
 use kernel::component::Component;
 use kernel::hil;
 use kernel::hil::i2c::I2CMaster;
+use kernel::hil::time::Alarm;
+use kernel::Chip;
 use kernel::Platform;
 use kernel::{create_capability, debug, static_init};
 use rv32i::csr;
@@ -226,6 +228,7 @@ pub unsafe fn reset_handler() {
         ibex::chip::Ibex<VirtualMuxAlarm<'static, ibex::timer::RvTimer>>,
         ibex::chip::Ibex::new(systick_virtual_alarm)
     );
+    systick_virtual_alarm.set_client(chip.systick());
     CHIP = Some(chip);
 
     // Need to enable all interrupts for Tock Kernel

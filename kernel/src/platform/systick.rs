@@ -121,7 +121,14 @@ impl<A: 'static + time::Alarm<'static>> SysTick for VirtualSystick<A> {
     }
 }
 
-// No need to handle the interrupt, or even register as a client! The entire purpose
-// of the interrupt is to cause a transition to userspace, which
-// already happens for any mtimer interrupt, and the overflow check is sufficient
-// to determine that it was an mtimer interrupt.
+impl<A: 'static + time::Alarm<'static>> time::AlarmClient for VirtualSystick<A> {
+    fn fired(&self) {
+        // No need to handle the interrupt! The entire purpose
+        // of the interrupt is to cause a transition to userspace, which
+        // already happens for any mtimer interrupt, and the overflow check is sufficient
+        // to determine that it was an mtimer interrupt.
+        // However, because of how the MuxAlarm code is written, if the passed alarm
+        // is a VirtualMuxAlarm, we must register as a client
+        // of the MuxAlarm in order to guarantee that requested interrupts are not dropped.
+    }
+}
