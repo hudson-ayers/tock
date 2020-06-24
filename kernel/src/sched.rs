@@ -328,7 +328,10 @@ impl Kernel {
         ipc: Option<&crate::ipc::IPC>,
     ) {
         let systick = chip.systick();
-        systick.reset();
+        let bench = crate::riscv_cycle_counter::CSR.bench(|| {
+            systick.reset();
+        });
+        panic!("time: {}", bench);
         systick.start_timer(KERNEL_TICK_DURATION_US);
 
         loop {

@@ -28,6 +28,7 @@ mod memop;
 mod platform;
 mod process;
 mod returncode;
+pub(crate) mod riscv_cycle_counter;
 mod sched;
 mod tbfheader;
 
