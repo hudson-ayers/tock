@@ -31,6 +31,7 @@ RUSTC_FLAGS ?= \
   -C relocation-model=dynamic-no-pic \
   -C link-arg=-zmax-page-size=512 \
   -C link-arg=-icf=all \
+	--emit=llvm-ir --emit=llvm-bc
 
 # RISC-V-specific flags.
 ifneq ($(findstring riscv32i, $(TARGET)),)
