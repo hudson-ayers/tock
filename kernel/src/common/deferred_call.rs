@@ -60,7 +60,7 @@ impl<T: Into<usize> + TryFrom<usize> + Copy> DeferredCall<T> {
     ///
     /// Only create one per task, preferably in the module that it will be used
     /// in.
-    pub const unsafe fn new(task: T) -> Self {
+    pub unsafe fn new(task: T) -> Self {
         DeferredCall(task)
     }
 

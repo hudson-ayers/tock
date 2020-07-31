@@ -37,7 +37,7 @@ impl<'a, T: ?Sized + ListNode<'a, T>> Iterator for ListIterator<'a, T> {
 }
 
 impl<'a, T: ?Sized + ListNode<'a, T>> List<'a, T> {
-    pub const fn new() -> List<'a, T> {
+    pub fn new() -> List<'a, T> {
         List {
             head: ListLink(Cell::new(None)),
         }

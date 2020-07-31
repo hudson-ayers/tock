@@ -1,4 +1,3 @@
-#![feature(const_fn)]
 #![forbid(unsafe_code)]
 #![no_std]
 
