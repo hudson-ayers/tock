@@ -157,7 +157,12 @@ pub unsafe fn reset_handler() {
 
     apollo3::init();
 
-    apollo3::clkgen::CLKGEN.set_clock_frequency(apollo3::clkgen::ClockFrequency::Freq48MHz);
+    // No need to statically allocate mcu/pwr/clk_ctrl because they are only used in main!
+    let mcu_ctrl = apollo3::mcuctrl::McuCtrl::new();
+    let pwr_ctrl = apollo3::pwrctrl::PwrCtrl::new();
+    let clkgen = apollo3::clkgen::ClkGen::new();
+
+    clkgen.set_clock_frequency(apollo3::clkgen::ClockFrequency::Freq48MHz);
 
     // initialize capabilities
     let process_mgmt_cap = create_capability!(capabilities::ProcessManagementCapability);
@@ -175,8 +180,8 @@ pub unsafe fn reset_handler() {
     let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new(&PROCESSES));
 
     // Power up components
-    apollo3::pwrctrl::PWRCTRL.enable_uart0();
-    apollo3::pwrctrl::PWRCTRL.enable_iom2();
+    pwr_ctrl.enable_uart0();
+    pwr_ctrl.enable_iom2();
 
     // Enable PinCfg
     gpio_port.enable_uart(&gpio_port[48], &gpio_port[49]);
@@ -247,17 +252,17 @@ pub unsafe fn reset_handler() {
     iom2.enable();
 
     // Setup BLE
-    apollo3::mcuctrl::MCUCTRL.enable_ble();
-    apollo3::clkgen::CLKGEN.enable_ble();
-    apollo3::pwrctrl::PWRCTRL.enable_ble();
+    mcu_ctrl.enable_ble();
+    clkgen.enable_ble();
+    pwr_ctrl.enable_ble();
     ble.setup_clocks();
-    apollo3::mcuctrl::MCUCTRL.reset_ble();
+    mcu_ctrl.reset_ble();
     ble.power_up();
     ble.ble_initialise();
 
     let ble_radio = ble::BLEComponent::new(board_kernel, ble, mux_alarm).finalize(());
 
-    apollo3::mcuctrl::MCUCTRL.print_chip_revision();
+    mcu_ctrl.print_chip_revision();
 
     debug!("Initialization complete. Entering main loop");
 
