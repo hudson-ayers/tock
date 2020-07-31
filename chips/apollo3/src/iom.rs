@@ -8,24 +8,17 @@ use kernel::common::StaticRef;
 use kernel::hil;
 use kernel::hil::i2c;
 
-pub static mut IOM0: Iom = Iom::new(IOM0_BASE);
-pub static mut IOM1: Iom = Iom::new(IOM1_BASE);
-pub static mut IOM2: Iom = Iom::new(IOM2_BASE);
-pub static mut IOM3: Iom = Iom::new(IOM3_BASE);
-pub static mut IOM4: Iom = Iom::new(IOM4_BASE);
-pub static mut IOM5: Iom = Iom::new(IOM5_BASE);
-
-const IOM0_BASE: StaticRef<IomRegisters> =
+pub const IOM0_BASE: StaticRef<IomRegisters> =
     unsafe { StaticRef::new(0x5000_4000 as *const IomRegisters) };
-const IOM1_BASE: StaticRef<IomRegisters> =
+pub const IOM1_BASE: StaticRef<IomRegisters> =
     unsafe { StaticRef::new(0x5000_5000 as *const IomRegisters) };
-const IOM2_BASE: StaticRef<IomRegisters> =
+pub const IOM2_BASE: StaticRef<IomRegisters> =
     unsafe { StaticRef::new(0x5000_6000 as *const IomRegisters) };
-const IOM3_BASE: StaticRef<IomRegisters> =
+pub const IOM3_BASE: StaticRef<IomRegisters> =
     unsafe { StaticRef::new(0x5000_7000 as *const IomRegisters) };
-const IOM4_BASE: StaticRef<IomRegisters> =
+pub const IOM4_BASE: StaticRef<IomRegisters> =
     unsafe { StaticRef::new(0x5000_8000 as *const IomRegisters) };
-const IOM5_BASE: StaticRef<IomRegisters> =
+pub const IOM5_BASE: StaticRef<IomRegisters> =
     unsafe { StaticRef::new(0x5000_9000 as *const IomRegisters) };
 
 register_structs! {
@@ -281,7 +274,7 @@ pub struct Iom<'a> {
 }
 
 impl<'a> Iom<'_> {
-    pub const fn new(base: StaticRef<IomRegisters>) -> Iom<'a> {
+    pub fn new(base: StaticRef<IomRegisters>) -> Iom<'a> {
         Iom {
             registers: base,
             master_client: OptionalCell::empty(),
