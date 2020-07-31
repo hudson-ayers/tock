@@ -335,7 +335,7 @@ pub struct UartDevice<'a> {
 impl<'a> uart::UartData<'a> for UartDevice<'a> {}
 
 impl<'a> UartDevice<'a> {
-    pub const fn new(mux: &'a MuxUart<'a>, receiver: bool) -> UartDevice<'a> {
+    pub fn new(mux: &'a MuxUart<'a>, receiver: bool) -> UartDevice<'a> {
         UartDevice {
             state: Cell::new(UartDeviceReceiveState::Idle),
             mux: mux,

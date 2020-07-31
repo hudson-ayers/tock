@@ -52,7 +52,7 @@ pub struct RoundRobinSched<'a> {
 impl<'a> RoundRobinSched<'a> {
     /// How long a process can run before being pre-empted
     const DEFAULT_TIMESLICE_US: u32 = 10000;
-    pub const fn new() -> RoundRobinSched<'a> {
+    pub fn new() -> RoundRobinSched<'a> {
         RoundRobinSched {
             time_remaining: Cell::new(Self::DEFAULT_TIMESLICE_US),
             processes: List::new(),

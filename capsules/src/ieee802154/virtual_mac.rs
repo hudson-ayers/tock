@@ -62,7 +62,7 @@ impl device::RxClient for MuxMac<'_> {
 }
 
 impl<'a> MuxMac<'a> {
-    pub const fn new(mac: &'a dyn device::MacDevice<'a>) -> MuxMac<'a> {
+    pub fn new(mac: &'a dyn device::MacDevice<'a>) -> MuxMac<'a> {
         MuxMac {
             mac: mac,
             users: List::new(),
@@ -196,7 +196,7 @@ pub struct MacUser<'a> {
 }
 
 impl<'a> MacUser<'a> {
-    pub const fn new(mux: &'a MuxMac<'a>) -> MacUser<'a> {
+    pub fn new(mux: &'a MuxMac<'a>) -> MacUser<'a> {
         MacUser {
             mux: mux,
             operation: MapCell::new(Op::Idle),

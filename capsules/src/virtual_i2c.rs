@@ -39,7 +39,7 @@ impl I2CHwMasterClient for MuxI2C<'_> {
 }
 
 impl<'a> MuxI2C<'a> {
-    pub const fn new(
+    pub fn new(
         i2c: &'a dyn i2c::I2CMaster,
         smbus: Option<&'a dyn i2c::SMBusMaster>,
         deferred_caller: &'a DynamicDeferredCall,
@@ -197,7 +197,7 @@ pub struct I2CDevice<'a> {
 }
 
 impl<'a> I2CDevice<'a> {
-    pub const fn new(mux: &'a MuxI2C<'a>, addr: u8) -> I2CDevice<'a> {
+    pub fn new(mux: &'a MuxI2C<'a>, addr: u8) -> I2CDevice<'a> {
         I2CDevice {
             mux: mux,
             addr: addr,
