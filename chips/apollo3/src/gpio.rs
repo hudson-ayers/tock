@@ -8,8 +8,10 @@ use kernel::common::registers::{register_bitfields, register_structs, ReadWrite}
 use kernel::common::StaticRef;
 use kernel::hil::gpio;
 
-pub const GPIO_BASE: StaticRef<GpioRegisters> =
-    unsafe { StaticRef::new(0x4001_0000 as *const GpioRegisters) };
+pub const GPIO_BASE_RAW: usize = 0x4001_0000; //safe to export outside crate
+
+const GPIO_BASE: StaticRef<GpioRegisters> =
+    unsafe { StaticRef::new(GPIO_BASE_RAW as *const GpioRegisters) };
 
 pub struct Port<'a> {
     pins: [GpioPin<'a>; 50],

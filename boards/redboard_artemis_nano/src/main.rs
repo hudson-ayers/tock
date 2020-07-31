@@ -117,43 +117,16 @@ impl Platform for RedboardArtemisNano {
 pub unsafe fn reset_handler() {
     // First, initialize chip drivers
     let stimer = static_init!(apollo3::stimer::STimer, apollo3::stimer::STimer::new());
-    let uart0 = static_init!(
-        apollo3::uart::Uart,
-        apollo3::uart::Uart::new(apollo3::uart::UART0_BASE)
-    );
-    let uart1 = static_init!(
-        apollo3::uart::Uart,
-        apollo3::uart::Uart::new(apollo3::uart::UART1_BASE)
-    );
+    let uart0 = static_init!(apollo3::uart::Uart, apollo3::uart::Uart::new_uart_0());
+    let uart1 = static_init!(apollo3::uart::Uart, apollo3::uart::Uart::new_uart_1());
     let gpio_port = static_init!(apollo3::gpio::Port, apollo3::gpio::Port::new());
-    let iom0 = static_init!(
-        apollo3::iom::Iom,
-        apollo3::iom::Iom::new(apollo3::iom::IOM0_BASE)
-    );
-    let iom1 = static_init!(
-        apollo3::iom::Iom,
-        apollo3::iom::Iom::new(apollo3::iom::IOM1_BASE)
-    );
-    let iom2 = static_init!(
-        apollo3::iom::Iom,
-        apollo3::iom::Iom::new(apollo3::iom::IOM2_BASE)
-    );
-    let iom3 = static_init!(
-        apollo3::iom::Iom,
-        apollo3::iom::Iom::new(apollo3::iom::IOM3_BASE)
-    );
-    let iom4 = static_init!(
-        apollo3::iom::Iom,
-        apollo3::iom::Iom::new(apollo3::iom::IOM4_BASE)
-    );
-    let iom5 = static_init!(
-        apollo3::iom::Iom,
-        apollo3::iom::Iom::new(apollo3::iom::IOM5_BASE)
-    );
-    let ble = static_init!(
-        apollo3::ble::Ble,
-        apollo3::ble::Ble::new(apollo3::ble::BLE_BASE)
-    );
+    let iom0 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new0());
+    let iom1 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new1());
+    let iom2 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new2());
+    let iom3 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new3());
+    let iom4 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new4());
+    let iom5 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new5());
+    let ble = static_init!(apollo3::ble::Ble, apollo3::ble::Ble::new());
 
     apollo3::init();
 
