@@ -3,31 +3,27 @@
 use core::fmt::Write;
 use cortexm4;
 use kernel::Chip;
+use kernel::Platform;
 
-use crate::ble;
-use crate::gpio;
-use crate::iom;
-use crate::nvic;
-use crate::stimer;
-use crate::uart;
-
-pub struct Apollo3 {
+pub struct Apollo3<P: Platform + 'static> {
     mpu: cortexm4::mpu::MPU,
     userspace_kernel_boundary: cortexm4::syscall::SysCall,
     scheduler_timer: cortexm4::systick::SysTick,
+    platform: &'static P,
 }
 
-impl Apollo3 {
-    pub unsafe fn new() -> Apollo3 {
-        Apollo3 {
+impl<P: Platform + 'static> Apollo3<P> {
+    pub unsafe fn new(platform: &'static P) -> Self {
+        Self {
             mpu: cortexm4::mpu::MPU::new(),
             userspace_kernel_boundary: cortexm4::syscall::SysCall::new(),
             scheduler_timer: cortexm4::systick::SysTick::new_with_calibration(48_000_000),
+            platform,
         }
     }
 }
 
-impl Chip for Apollo3 {
+impl<P: Platform + 'static> Chip for Apollo3<P> {
     type MPU = cortexm4::mpu::MPU;
     type UserspaceKernelBoundary = cortexm4::syscall::SysCall;
     type SchedulerTimer = cortexm4::systick::SysTick;
@@ -37,22 +33,7 @@ impl Chip for Apollo3 {
         unsafe {
             loop {
                 if let Some(interrupt) = cortexm4::nvic::next_pending() {
-                    match interrupt {
-                        nvic::STIMER..=nvic::STIMER_CMPR7 => stimer::STIMER.handle_interrupt(),
-                        nvic::UART0 => uart::UART0.handle_interrupt(),
-                        nvic::UART1 => uart::UART1.handle_interrupt(),
-                        nvic::GPIO => gpio::PORT.handle_interrupt(),
-                        nvic::IOMSTR0 => iom::IOM0.handle_interrupt(),
-                        nvic::IOMSTR1 => iom::IOM1.handle_interrupt(),
-                        nvic::IOMSTR2 => iom::IOM2.handle_interrupt(),
-                        nvic::IOMSTR3 => iom::IOM3.handle_interrupt(),
-                        nvic::IOMSTR4 => iom::IOM4.handle_interrupt(),
-                        nvic::IOMSTR5 => iom::IOM5.handle_interrupt(),
-                        nvic::BLE => ble::BLE.handle_interrupt(),
-                        _ => {
-                            panic!("unhandled interrupt {}", interrupt);
-                        }
-                    }
+                    self.platform.handle_interrupt(interrupt);
 
                     let n = cortexm4::nvic::Nvic::new(interrupt);
                     n.clear_pending();

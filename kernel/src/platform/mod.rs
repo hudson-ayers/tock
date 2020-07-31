@@ -47,6 +47,12 @@ pub trait Platform {
     where
         F: FnOnce(Option<&dyn Driver>) -> R;
 
+    /// Each platform should define a mapping from nvic IDs to chip driver
+    /// interrupt handlers in this function. This is necessary to allow for
+    /// individual platforms to include/exclude chip drivers based on whether
+    /// they are needed.
+    fn handle_interrupt(&self, interrupt: u32);
+
     /// Check the platform-provided system call filter for all non-yield system
     /// calls.  If the system call is allowed for the provided process then
     /// return Ok(()).  Otherwise, return Err with a ReturnCode that will be

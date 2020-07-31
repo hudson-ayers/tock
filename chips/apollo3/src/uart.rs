@@ -9,14 +9,12 @@ use kernel::common::StaticRef;
 use kernel::hil;
 use kernel::ReturnCode;
 
-pub static mut UART0: Uart = Uart::new(UART0_BASE);
-
-const UART0_BASE: StaticRef<UartRegisters> =
+// Making this pub feels like bad practice, perhaps only the address should be
+// a pub const, and the StaticRef could be initialized in main?
+pub const UART0_BASE: StaticRef<UartRegisters> =
     unsafe { StaticRef::new(0x4001_C000 as *const UartRegisters) };
 
-pub static mut UART1: Uart = Uart::new(UART1_BASE);
-
-const UART1_BASE: StaticRef<UartRegisters> =
+pub const UART1_BASE: StaticRef<UartRegisters> =
     unsafe { StaticRef::new(0x4001_D000 as *const UartRegisters) };
 
 register_structs! {
@@ -179,7 +177,7 @@ pub struct UartParams {
 }
 
 impl Uart<'_> {
-    pub const fn new(base: StaticRef<UartRegisters>) -> Self {
+    pub fn new(base: StaticRef<UartRegisters>) -> Self {
         Self {
             registers: base,
             clock_frequency: 24_000_000,
