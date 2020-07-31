@@ -82,8 +82,16 @@ pub unsafe fn run(
         capsules::ieee802154::virtual_mac::MacUser::new(mux_mac)
     );
     mux_mac.add_user(radio_mac);
+    let ipsender_virtual_alarm = static_init!(
+        VirtualMuxAlarm<'static, sam4l::ast::Ast>,
+        VirtualMuxAlarm::new(mux_alarm)
+    );
     let sixlowpan = static_init!(
-        Sixlowpan<'static, sam4l::ast::Ast<'static>, sixlowpan_compression::Context>,
+        Sixlowpan<
+            'static,
+            VirtualMuxAlarm<sam4l::ast::Ast<'static>>,
+            sixlowpan_compression::Context,
+        >,
         Sixlowpan::new(
             sixlowpan_compression::Context {
                 prefix: DEFAULT_CTX_PREFIX,
@@ -91,7 +99,7 @@ pub unsafe fn run(
                 id: 0,
                 compress: false,
             },
-            &sam4l::ast::AST
+            ipsender_virtual_alarm
         )
     );
 
@@ -106,11 +114,6 @@ pub unsafe fn run(
     };
 
     let ip6_dg = static_init!(IP6Packet<'static>, IP6Packet::new(ip_pyld));
-
-    let ipsender_virtual_alarm = static_init!(
-        VirtualMuxAlarm<'static, sam4l::ast::Ast>,
-        VirtualMuxAlarm::new(mux_alarm)
-    );
 
     let ip6_sender = static_init!(
         IP6SendStruct<'static, VirtualMuxAlarm<'static, sam4l::ast::Ast<'static>>>,
