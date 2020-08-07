@@ -9,7 +9,6 @@
 #![feature(const_in_array_repeat_expressions)]
 #![deny(missing_docs)]
 
-use apollo3::nvic;
 use capsules::virtual_alarm::VirtualMuxAlarm;
 use kernel::capabilities;
 use kernel::common::dynamic_deferred_call::DynamicDeferredCall;
@@ -40,21 +39,13 @@ const FAULT_RESPONSE: kernel::procs::FaultResponse = kernel::procs::FaultRespons
 #[link_section = ".stack_buffer"]
 pub static mut STACK_MEMORY: [u8; 0x1000] = [0; 0x1000];
 
+apollo3::apollo3_driver_definitions!();
+
 /// A structure representing this platform that holds references to all
 /// capsules for this platform.
 struct RedboardArtemisNano {
     // Begin chip drivers here
-    stimer: &'static apollo3::stimer::STimer<'static>,
-    uart0: &'static apollo3::uart::Uart<'static>,
-    uart1: &'static apollo3::uart::Uart<'static>,
-    gpio_port: &'static apollo3::gpio::Port<'static>,
-    iom0: &'static apollo3::iom::Iom<'static>,
-    iom1: &'static apollo3::iom::Iom<'static>,
-    iom2: &'static apollo3::iom::Iom<'static>,
-    iom3: &'static apollo3::iom::Iom<'static>,
-    iom4: &'static apollo3::iom::Iom<'static>,
-    iom5: &'static apollo3::iom::Iom<'static>,
-    ble: &'static apollo3::ble::Ble<'static>,
+    drivers: &'static Apollo3Drivers,
 
     // Begin capsules here
     alarm: &'static capsules::alarm::AlarmDriver<
@@ -90,20 +81,7 @@ impl Platform for RedboardArtemisNano {
     }
 
     fn handle_interrupt(&self, interrupt: u32) {
-        match interrupt {
-            nvic::STIMER..=nvic::STIMER_CMPR7 => self.stimer.handle_interrupt(),
-            nvic::UART0 => self.uart0.handle_interrupt(),
-            nvic::UART1 => self.uart1.handle_interrupt(),
-            nvic::GPIO => self.gpio_port.handle_interrupt(),
-            nvic::IOMSTR0 => self.iom0.handle_interrupt(),
-            nvic::IOMSTR1 => self.iom1.handle_interrupt(),
-            nvic::IOMSTR2 => self.iom2.handle_interrupt(),
-            nvic::IOMSTR3 => self.iom3.handle_interrupt(),
-            nvic::IOMSTR4 => self.iom4.handle_interrupt(),
-            nvic::IOMSTR5 => self.iom5.handle_interrupt(),
-            nvic::BLE => self.ble.handle_interrupt(),
-            _ => panic!("unhandled interrupt {}", interrupt),
-        }
+        apollo3::apollo3_interrupt_mapping!(self, interrupt);
     }
 }
 
@@ -116,17 +94,7 @@ impl Platform for RedboardArtemisNano {
 #[no_mangle]
 pub unsafe fn reset_handler() {
     // First, initialize chip drivers
-    let stimer = static_init!(apollo3::stimer::STimer, apollo3::stimer::STimer::new());
-    let uart0 = static_init!(apollo3::uart::Uart, apollo3::uart::Uart::new_uart_0());
-    let uart1 = static_init!(apollo3::uart::Uart, apollo3::uart::Uart::new_uart_1());
-    let gpio_port = static_init!(apollo3::gpio::Port, apollo3::gpio::Port::new());
-    let iom0 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new0());
-    let iom1 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new1());
-    let iom2 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new2());
-    let iom3 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new3());
-    let iom4 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new4());
-    let iom5 = static_init!(apollo3::iom::Iom, apollo3::iom::Iom::new5());
-    let ble = static_init!(apollo3::ble::Ble, apollo3::ble::Ble::new());
+    let drivers = static_init!(Apollo3Drivers, Apollo3Drivers::new());
 
     apollo3::init();
 
@@ -157,20 +125,24 @@ pub unsafe fn reset_handler() {
     pwr_ctrl.enable_iom2();
 
     // Enable PinCfg
-    gpio_port.enable_uart(&gpio_port[48], &gpio_port[49]);
+    &drivers
+        .gpio_port
+        .enable_uart(&&drivers.gpio_port[48], &&drivers.gpio_port[49]);
     // Enable SDA and SCL for I2C2 (exposed via Qwiic)
-    gpio_port.enable_i2c(&gpio_port[25], &gpio_port[27]);
+    &drivers
+        .gpio_port
+        .enable_i2c(&&drivers.gpio_port[25], &&drivers.gpio_port[27]);
 
     // Configure kernel debug gpios as early as possible
     kernel::debug::assign_gpios(
-        Some(&gpio_port[19]), // Blue LED
+        Some(&drivers.gpio_port[19]), // Blue LED
         None,
         None,
     );
 
     // Create a shared UART channel for the console and for kernel debug.
     let uart_mux =
-        components::console::UartMuxComponent::new(uart0, 115200, dynamic_deferred_caller)
+        components::console::UartMuxComponent::new(&drivers.uart0, 115200, dynamic_deferred_caller)
             .finalize(());
 
     // Setup the console.
@@ -182,7 +154,7 @@ pub unsafe fn reset_handler() {
     let led = components::led::LedsComponent::new(components::led_component_helper!(
         apollo3::gpio::GpioPin,
         (
-            &gpio_port[19],
+            &&drivers.gpio_port[19],
             kernel::hil::gpio::ActivationMode::ActiveHigh
         )
     ))
@@ -194,18 +166,18 @@ pub unsafe fn reset_handler() {
         board_kernel,
         components::gpio_component_helper!(
             apollo3::gpio::GpioPin,
-            0 => &gpio_port[13],  // A0
-            1 => &gpio_port[33],  // A1
-            2 => &gpio_port[11],  // A2
-            3 => &gpio_port[29],  // A3
-            5 => &gpio_port[31]  // A5
+            0 => &&drivers.gpio_port[13],  // A0
+            1 => &&drivers.gpio_port[33],  // A1
+            2 => &&drivers.gpio_port[11],  // A2
+            3 => &&drivers.gpio_port[29],  // A3
+            5 => &&drivers.gpio_port[31]  // A5
         ),
     )
     .finalize(components::gpio_component_buf!(apollo3::gpio::GpioPin));
 
     // Create a shared virtualisation mux layer on top of a single hardware
     // alarm.
-    let mux_alarm = components::alarm::AlarmMuxComponent::new(stimer).finalize(
+    let mux_alarm = components::alarm::AlarmMuxComponent::new(&drivers.stimer).finalize(
         components::alarm_mux_component_helper!(apollo3::stimer::STimer),
     );
     let alarm = components::alarm::AlarmDriverComponent::new(board_kernel, mux_alarm)
@@ -215,25 +187,25 @@ pub unsafe fn reset_handler() {
     let i2c_master = static_init!(
         capsules::i2c_master::I2CMasterDriver<apollo3::iom::Iom<'static>>,
         capsules::i2c_master::I2CMasterDriver::new(
-            iom2,
+            &drivers.iom2,
             &mut capsules::i2c_master::BUF,
             board_kernel.create_grant(&memory_allocation_cap)
         )
     );
 
-    iom2.set_master_client(i2c_master);
-    iom2.enable();
+    &drivers.iom2.set_master_client(i2c_master);
+    &drivers.iom2.enable();
 
     // Setup BLE
     mcu_ctrl.enable_ble();
     clkgen.enable_ble();
     pwr_ctrl.enable_ble();
-    ble.setup_clocks();
+    &drivers.ble.setup_clocks();
     mcu_ctrl.reset_ble();
-    ble.power_up();
-    ble.ble_initialise();
+    &drivers.ble.power_up();
+    &drivers.ble.ble_initialise();
 
-    let ble_radio = ble::BLEComponent::new(board_kernel, ble, mux_alarm).finalize(());
+    let ble_radio = ble::BLEComponent::new(board_kernel, &drivers.ble, mux_alarm).finalize(());
 
     mcu_ctrl.print_chip_revision();
 
@@ -254,17 +226,7 @@ pub unsafe fn reset_handler() {
     let artemis_nano = static_init!(
         RedboardArtemisNano,
         RedboardArtemisNano {
-            stimer,
-            uart0,
-            uart1,
-            gpio_port,
-            iom0,
-            iom1,
-            iom2,
-            iom3,
-            iom4,
-            iom5,
-            ble,
+            drivers,
             alarm,
             console,
             gpio,
