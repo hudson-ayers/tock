@@ -47,12 +47,6 @@ pub trait Platform {
     where
         F: FnOnce(Option<&dyn Driver>) -> R;
 
-    /// Each platform should define a mapping from nvic IDs to chip driver
-    /// interrupt handlers in this function. This is necessary to allow for
-    /// individual platforms to include/exclude chip drivers based on whether
-    /// they are needed.
-    fn handle_interrupt(&self, interrupt: u32);
-
     /// Check the platform-provided system call filter for all non-yield system
     /// calls.  If the system call is allowed for the provided process then
     /// return Ok(()).  Otherwise, return Err with a ReturnCode that will be
@@ -143,6 +137,16 @@ pub trait Chip {
     /// the Display trait.
     /// Used by panic.
     unsafe fn print_state(&self, writer: &mut dyn Write);
+}
+
+/// Trait for objects that can map interrupts to hardware drivers.
+/// Each chip should accept a generic argument of this type, and use it to
+/// map interrupts. This allows out-of-tree boards to exclude code for chip drivers
+/// they do not use.
+pub trait InterruptService {
+    /// Service an interrupt, if supported by this chip. If this interrupt number is not supported,
+    /// return false.
+    unsafe fn service_interrupt(&self, interrupt: u32) -> bool;
 }
 
 /// Generic operations that clock-like things are expected to support.

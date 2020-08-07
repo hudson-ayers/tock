@@ -3,22 +3,22 @@
 use core::fmt::Write;
 use cortexm4;
 use kernel::Chip;
-use kernel::Platform;
+use kernel::InterruptService;
 
-pub struct Apollo3<P: Platform + 'static> {
+pub struct Apollo3<I: InterruptService + 'static> {
     mpu: cortexm4::mpu::MPU,
     userspace_kernel_boundary: cortexm4::syscall::SysCall,
     scheduler_timer: cortexm4::systick::SysTick,
-    platform: &'static P,
+    interrupt_service: &'static I,
 }
 
-impl<P: Platform + 'static> Apollo3<P> {
-    pub unsafe fn new(platform: &'static P) -> Self {
+impl<I: InterruptService + 'static> Apollo3<I> {
+    pub unsafe fn new(interrupt_service: &'static I) -> Self {
         Self {
             mpu: cortexm4::mpu::MPU::new(),
             userspace_kernel_boundary: cortexm4::syscall::SysCall::new(),
             scheduler_timer: cortexm4::systick::SysTick::new_with_calibration(48_000_000),
-            platform,
+            interrupt_service,
         }
     }
 }
@@ -27,11 +27,12 @@ impl<P: Platform + 'static> Apollo3<P> {
 /// instantiates all drivers for the apollo3. If a board
 /// wishes to use only a subset of these drivers, this
 /// macro cannot be used, and this struct should be
-/// redefined.
+/// redefined. The input to the macro is the name of the struct
+/// that will hold the drivers, which can be chosen by the board.
 #[macro_export]
 macro_rules! apollo3_driver_definitions {
-    () => {
-        struct Apollo3Drivers {
+    ($N:ident) => {
+        struct $N {
             stimer: apollo3::stimer::STimer<'static>,
             uart0: apollo3::uart::Uart<'static>,
             uart1: apollo3::uart::Uart<'static>,
@@ -44,7 +45,7 @@ macro_rules! apollo3_driver_definitions {
             iom5: apollo3::iom::Iom<'static>,
             ble: apollo3::ble::Ble<'static>,
         }
-        impl Apollo3Drivers {
+        impl $N {
             unsafe fn new() -> Self {
                 Self {
                     stimer: apollo3::stimer::STimer::new(),
@@ -61,34 +62,30 @@ macro_rules! apollo3_driver_definitions {
                 }
             }
         }
-    };
-}
-
-/// This macro defines the interrupt mapping for all drivers in the
-/// Apollo3 chip. If a board wishes to use only a subset of these drivers,
-/// the mapping must be manually defined.
-#[macro_export]
-macro_rules! apollo3_interrupt_mapping {
-    ($P:expr, $I: expr) => {
-        use apollo3::nvic;
-        match $I {
-            nvic::STIMER..=nvic::STIMER_CMPR7 => $P.drivers.stimer.handle_interrupt(),
-            nvic::UART0 => $P.drivers.uart0.handle_interrupt(),
-            nvic::UART1 => $P.drivers.uart1.handle_interrupt(),
-            nvic::GPIO => $P.drivers.gpio_port.handle_interrupt(),
-            nvic::IOMSTR0 => $P.drivers.iom0.handle_interrupt(),
-            nvic::IOMSTR1 => $P.drivers.iom1.handle_interrupt(),
-            nvic::IOMSTR2 => $P.drivers.iom2.handle_interrupt(),
-            nvic::IOMSTR3 => $P.drivers.iom3.handle_interrupt(),
-            nvic::IOMSTR4 => $P.drivers.iom4.handle_interrupt(),
-            nvic::IOMSTR5 => $P.drivers.iom5.handle_interrupt(),
-            nvic::BLE => $P.drivers.ble.handle_interrupt(),
-            _ => panic!("unhandled interrupt {}", $I),
+        impl kernel::InterruptService for $N {
+            unsafe fn service_interrupt(&self, interrupt: u32) -> bool {
+                use apollo3::nvic;
+                match interrupt {
+                    nvic::STIMER..=nvic::STIMER_CMPR7 => self.stimer.handle_interrupt(),
+                    nvic::UART0 => self.uart0.handle_interrupt(),
+                    nvic::UART1 => self.uart1.handle_interrupt(),
+                    nvic::GPIO => self.gpio_port.handle_interrupt(),
+                    nvic::IOMSTR0 => self.iom0.handle_interrupt(),
+                    nvic::IOMSTR1 => self.iom1.handle_interrupt(),
+                    nvic::IOMSTR2 => self.iom2.handle_interrupt(),
+                    nvic::IOMSTR3 => self.iom3.handle_interrupt(),
+                    nvic::IOMSTR4 => self.iom4.handle_interrupt(),
+                    nvic::IOMSTR5 => self.iom5.handle_interrupt(),
+                    nvic::BLE => self.ble.handle_interrupt(),
+                    _ => return false,
+                }
+                true
+            }
         }
     };
 }
 
-impl<P: Platform + 'static> Chip for Apollo3<P> {
+impl<I: InterruptService + 'static> Chip for Apollo3<I> {
     type MPU = cortexm4::mpu::MPU;
     type UserspaceKernelBoundary = cortexm4::syscall::SysCall;
     type SchedulerTimer = cortexm4::systick::SysTick;
@@ -98,7 +95,9 @@ impl<P: Platform + 'static> Chip for Apollo3<P> {
         unsafe {
             loop {
                 if let Some(interrupt) = cortexm4::nvic::next_pending() {
-                    self.platform.handle_interrupt(interrupt);
+                    if !self.interrupt_service.service_interrupt(interrupt) {
+                        panic!("unhandled interrupt, {}", interrupt);
+                    }
 
                     let n = cortexm4::nvic::Nvic::new(interrupt);
                     n.clear_pending();
