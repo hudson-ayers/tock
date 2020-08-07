@@ -28,8 +28,11 @@ const NUM_PROCS: usize = 4;
 // Actual memory for holding the active process structures.
 static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] = [None; 4];
 
+// Instantiate Apollo3Drivers struct
+apollo3::apollo3_driver_definitions!(Apollo3Drivers);
+
 // Static reference to chip for panic dumps.
-static mut CHIP: Option<&'static apollo3::chip::Apollo3<RedboardArtemisNano>> = None;
+static mut CHIP: Option<&'static apollo3::chip::Apollo3<Apollo3Drivers>> = None;
 
 // How should the kernel respond when a process faults.
 const FAULT_RESPONSE: kernel::procs::FaultResponse = kernel::procs::FaultResponse::Panic;
@@ -39,15 +42,9 @@ const FAULT_RESPONSE: kernel::procs::FaultResponse = kernel::procs::FaultRespons
 #[link_section = ".stack_buffer"]
 pub static mut STACK_MEMORY: [u8; 0x1000] = [0; 0x1000];
 
-apollo3::apollo3_driver_definitions!();
-
 /// A structure representing this platform that holds references to all
 /// capsules for this platform.
 struct RedboardArtemisNano {
-    // Begin chip drivers here
-    drivers: &'static Apollo3Drivers,
-
-    // Begin capsules here
     alarm: &'static capsules::alarm::AlarmDriver<
         'static,
         VirtualMuxAlarm<'static, apollo3::stimer::STimer<'static>>,
@@ -78,10 +75,6 @@ impl Platform for RedboardArtemisNano {
             capsules::ble_advertising_driver::DRIVER_NUM => f(Some(self.ble_radio)),
             _ => f(None),
         }
-    }
-
-    fn handle_interrupt(&self, interrupt: u32) {
-        apollo3::apollo3_interrupt_mapping!(self, interrupt);
     }
 }
 
@@ -226,7 +219,6 @@ pub unsafe fn reset_handler() {
     let artemis_nano = static_init!(
         RedboardArtemisNano,
         RedboardArtemisNano {
-            drivers,
             alarm,
             console,
             gpio,
@@ -237,8 +229,8 @@ pub unsafe fn reset_handler() {
     );
 
     let chip = static_init!(
-        apollo3::chip::Apollo3<RedboardArtemisNano>,
-        apollo3::chip::Apollo3::new(artemis_nano)
+        apollo3::chip::Apollo3<Apollo3Drivers>,
+        apollo3::chip::Apollo3::new(drivers)
     );
     CHIP = Some(chip);
 
