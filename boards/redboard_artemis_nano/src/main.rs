@@ -86,10 +86,9 @@ impl Platform for RedboardArtemisNano {
 /// execution begins here.
 #[no_mangle]
 pub unsafe fn reset_handler() {
-    // First, initialize chip peripherals
-    let peripherals = static_init!(Apollo3Peripherals, Apollo3Peripherals::new());
-
     apollo3::init();
+
+    let peripherals = static_init!(Apollo3Peripherals, Apollo3Peripherals::new());
 
     // No need to statically allocate mcu/pwr/clk_ctrl because they are only used in main!
     let mcu_ctrl = apollo3::mcuctrl::McuCtrl::new();

@@ -248,10 +248,9 @@ unsafe fn set_pin_primary_functions(peripherals: &Sam4lPeripherals) {
 /// execution begins here.
 #[no_mangle]
 pub unsafe fn reset_handler() {
+    sam4l::init();
     let pm = static_init!(sam4l::pm::PowerManager, sam4l::pm::PowerManager::new());
     let peripherals = static_init!(Sam4lPeripherals, Sam4lPeripherals::new(pm));
-
-    sam4l::init();
 
     pm.setup_system_clock(
         sam4l::pm::SystemClockSource::PllExternalOscillatorAt48MHz {
