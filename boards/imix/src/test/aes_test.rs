@@ -41,9 +41,7 @@ pub unsafe fn run_aes128_cbc(aes: &'static Aes) {
     t.run();
 }
 
-unsafe fn static_init_test_ctr(
-    aes: &'static Aes,
-) -> &'static mut TestAes128Ctr<'static, Aes<'static>> {
+unsafe fn static_init_test_ctr(aes: &'static Aes) -> &'static TestAes128Ctr<'static, Aes<'static>> {
     let source = static_init!([u8; 4 * AES128_BLOCK_SIZE], [0; 4 * AES128_BLOCK_SIZE]);
     let data = static_init!([u8; 6 * AES128_BLOCK_SIZE], [0; 6 * AES128_BLOCK_SIZE]);
     let key = static_init!([u8; AES128_KEY_SIZE], [0; AES128_KEY_SIZE]);
@@ -55,9 +53,7 @@ unsafe fn static_init_test_ctr(
     )
 }
 
-unsafe fn static_init_test_cbc(
-    aes: &'static Aes,
-) -> &'static mut TestAes128Cbc<'static, Aes<'static>> {
+unsafe fn static_init_test_cbc(aes: &'static Aes) -> &'static TestAes128Cbc<'static, Aes<'static>> {
     let source = static_init!([u8; 4 * AES128_BLOCK_SIZE], [0; 4 * AES128_BLOCK_SIZE]);
     let data = static_init!([u8; 6 * AES128_BLOCK_SIZE], [0; 6 * AES128_BLOCK_SIZE]);
     let key = static_init!([u8; AES128_KEY_SIZE], [0; AES128_KEY_SIZE]);
