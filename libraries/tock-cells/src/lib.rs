@@ -7,7 +7,7 @@
 //
 // Tock expects this feature to stabilize in the near future.
 // Tracking: https://github.com/rust-lang/rust/issues/62358
-#![feature(option_result_contains)]
+#![feature(option_result_contains, const_fn)]
 #![no_std]
 
 pub mod map_cell;

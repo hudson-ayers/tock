@@ -145,7 +145,7 @@ impl Component for UDPMuxComponent {
         let sixlowpan = static_init!(
             sixlowpan_state::Sixlowpan<
                 'static,
-                sam4l::ast::Ast<'static>,
+                VirtualMuxAlarm<'static, sam4l::ast::Ast>,
                 sixlowpan_compression::Context,
             >,
             sixlowpan_state::Sixlowpan::new(
@@ -155,7 +155,7 @@ impl Component for UDPMuxComponent {
                     id: 0,
                     compress: false,
                 },
-                &sam4l::ast::AST
+                ipsender_virtual_alarm
             )
         );
 
