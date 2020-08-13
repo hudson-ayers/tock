@@ -26,7 +26,8 @@ impl Write for Writer {
 impl IoWrite for Writer {
     fn write(&mut self, buf: &[u8]) {
         // Here, we create a second instance of the USART3 struct.
-        // This is okay because we only call this during a panic.
+        // This is okay because we only call this during a panic, and
+        // we will never actually process the interrupts
         let uart = unsafe { sam4l::usart::USART::new_usart3(CHIP.unwrap().pm) };
         let regs_manager = &sam4l::usart::USARTRegManager::panic_new(&uart);
         if !self.initialized {
