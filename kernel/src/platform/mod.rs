@@ -139,9 +139,9 @@ pub trait Chip {
     unsafe fn print_state(&self, writer: &mut dyn Write);
 }
 
-/// Trait for objects that can map interrupts to hardware drivers.
+/// Trait for objects that can map interrupts to hardware peripherals.
 /// Each chip should accept a generic argument of this type, and use it to
-/// map interrupts. This allows out-of-tree boards to exclude code for chip drivers
+/// map interrupts. This allows out-of-tree boards to exclude code for chip peripheral drivers
 /// they do not use.
 pub trait InterruptService<T> {
     /// Service an interrupt, if supported by this chip. If this interrupt number is not supported,

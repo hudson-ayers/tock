@@ -5,14 +5,14 @@ use cortexm4;
 use kernel::Chip;
 use kernel::InterruptService;
 
-pub struct Apollo3<I: InterruptService + 'static> {
+pub struct Apollo3<I: InterruptService<()> + 'static> {
     mpu: cortexm4::mpu::MPU,
     userspace_kernel_boundary: cortexm4::syscall::SysCall,
     scheduler_timer: cortexm4::systick::SysTick,
     interrupt_service: &'static I,
 }
 
-impl<I: InterruptService + 'static> Apollo3<I> {
+impl<I: InterruptService<()> + 'static> Apollo3<I> {
     pub unsafe fn new(interrupt_service: &'static I) -> Self {
         Self {
             mpu: cortexm4::mpu::MPU::new(),
@@ -24,13 +24,13 @@ impl<I: InterruptService + 'static> Apollo3<I> {
 }
 
 /// This macro defines a struct that, when initialized,
-/// instantiates all drivers for the apollo3. If a board
-/// wishes to use only a subset of these drivers, this
+/// instantiates all peripheral drivers for the apollo3. If a board
+/// wishes to use only a subset of these peripherals, this
 /// macro cannot be used, and this struct should be
-/// redefined. The input to the macro is the name of the struct
-/// that will hold the drivers, which can be chosen by the board.
+/// constructed manually in main.rs. The input to the macro is the name of the struct
+/// that will hold the peripherals, which can be chosen by the board.
 #[macro_export]
-macro_rules! apollo3_driver_definitions {
+macro_rules! create_default_apollo3_peripherals {
     ($N:ident) => {
         struct $N {
             stimer: apollo3::stimer::STimer<'static>,
@@ -62,7 +62,7 @@ macro_rules! apollo3_driver_definitions {
                 }
             }
         }
-        impl kernel::InterruptService for $N {
+        impl kernel::InterruptService<()> for $N {
             unsafe fn service_interrupt(&self, interrupt: u32) -> bool {
                 use apollo3::nvic;
                 match interrupt {
@@ -81,11 +81,14 @@ macro_rules! apollo3_driver_definitions {
                 }
                 true
             }
+            unsafe fn service_deferred_call(&self, _: ()) -> bool {
+                false
+            }
         }
     };
 }
 
-impl<I: InterruptService + 'static> Chip for Apollo3<I> {
+impl<I: InterruptService<()> + 'static> Chip for Apollo3<I> {
     type MPU = cortexm4::mpu::MPU;
     type UserspaceKernelBoundary = cortexm4::syscall::SysCall;
     type SchedulerTimer = cortexm4::systick::SysTick;

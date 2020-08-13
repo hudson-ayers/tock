@@ -28,11 +28,11 @@ const NUM_PROCS: usize = 4;
 // Actual memory for holding the active process structures.
 static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] = [None; 4];
 
-// Instantiate Apollo3Drivers struct
-apollo3::apollo3_driver_definitions!(Apollo3Drivers);
+// Instantiate Apollo3Peripherals struct
+apollo3::create_default_apollo3_peripherals!(Apollo3Peripherals);
 
 // Static reference to chip for panic dumps.
-static mut CHIP: Option<&'static apollo3::chip::Apollo3<Apollo3Drivers>> = None;
+static mut CHIP: Option<&'static apollo3::chip::Apollo3<Apollo3Peripherals>> = None;
 
 // How should the kernel respond when a process faults.
 const FAULT_RESPONSE: kernel::procs::FaultResponse = kernel::procs::FaultResponse::Panic;
@@ -86,8 +86,8 @@ impl Platform for RedboardArtemisNano {
 /// execution begins here.
 #[no_mangle]
 pub unsafe fn reset_handler() {
-    // First, initialize chip drivers
-    let drivers = static_init!(Apollo3Drivers, Apollo3Drivers::new());
+    // First, initialize chip peripherals
+    let peripherals = static_init!(Apollo3Peripherals, Apollo3Peripherals::new());
 
     apollo3::init();
 
@@ -118,25 +118,28 @@ pub unsafe fn reset_handler() {
     pwr_ctrl.enable_iom2();
 
     // Enable PinCfg
-    &drivers
+    &peripherals
         .gpio_port
-        .enable_uart(&&drivers.gpio_port[48], &&drivers.gpio_port[49]);
+        .enable_uart(&&peripherals.gpio_port[48], &&peripherals.gpio_port[49]);
     // Enable SDA and SCL for I2C2 (exposed via Qwiic)
-    &drivers
+    &peripherals
         .gpio_port
-        .enable_i2c(&&drivers.gpio_port[25], &&drivers.gpio_port[27]);
+        .enable_i2c(&&peripherals.gpio_port[25], &&peripherals.gpio_port[27]);
 
     // Configure kernel debug gpios as early as possible
     kernel::debug::assign_gpios(
-        Some(&drivers.gpio_port[19]), // Blue LED
+        Some(&peripherals.gpio_port[19]), // Blue LED
         None,
         None,
     );
 
     // Create a shared UART channel for the console and for kernel debug.
-    let uart_mux =
-        components::console::UartMuxComponent::new(&drivers.uart0, 115200, dynamic_deferred_caller)
-            .finalize(());
+    let uart_mux = components::console::UartMuxComponent::new(
+        &peripherals.uart0,
+        115200,
+        dynamic_deferred_caller,
+    )
+    .finalize(());
 
     // Setup the console.
     let console = components::console::ConsoleComponent::new(board_kernel, uart_mux).finalize(());
@@ -147,7 +150,7 @@ pub unsafe fn reset_handler() {
     let led = components::led::LedsComponent::new(components::led_component_helper!(
         apollo3::gpio::GpioPin,
         (
-            &&drivers.gpio_port[19],
+            &&peripherals.gpio_port[19],
             kernel::hil::gpio::ActivationMode::ActiveHigh
         )
     ))
@@ -159,18 +162,18 @@ pub unsafe fn reset_handler() {
         board_kernel,
         components::gpio_component_helper!(
             apollo3::gpio::GpioPin,
-            0 => &&drivers.gpio_port[13],  // A0
-            1 => &&drivers.gpio_port[33],  // A1
-            2 => &&drivers.gpio_port[11],  // A2
-            3 => &&drivers.gpio_port[29],  // A3
-            5 => &&drivers.gpio_port[31]  // A5
+            0 => &&peripherals.gpio_port[13],  // A0
+            1 => &&peripherals.gpio_port[33],  // A1
+            2 => &&peripherals.gpio_port[11],  // A2
+            3 => &&peripherals.gpio_port[29],  // A3
+            5 => &&peripherals.gpio_port[31]  // A5
         ),
     )
     .finalize(components::gpio_component_buf!(apollo3::gpio::GpioPin));
 
     // Create a shared virtualisation mux layer on top of a single hardware
     // alarm.
-    let mux_alarm = components::alarm::AlarmMuxComponent::new(&drivers.stimer).finalize(
+    let mux_alarm = components::alarm::AlarmMuxComponent::new(&peripherals.stimer).finalize(
         components::alarm_mux_component_helper!(apollo3::stimer::STimer),
     );
     let alarm = components::alarm::AlarmDriverComponent::new(board_kernel, mux_alarm)
@@ -180,25 +183,25 @@ pub unsafe fn reset_handler() {
     let i2c_master = static_init!(
         capsules::i2c_master::I2CMasterDriver<apollo3::iom::Iom<'static>>,
         capsules::i2c_master::I2CMasterDriver::new(
-            &drivers.iom2,
+            &peripherals.iom2,
             &mut capsules::i2c_master::BUF,
             board_kernel.create_grant(&memory_allocation_cap)
         )
     );
 
-    &drivers.iom2.set_master_client(i2c_master);
-    &drivers.iom2.enable();
+    &peripherals.iom2.set_master_client(i2c_master);
+    &peripherals.iom2.enable();
 
     // Setup BLE
     mcu_ctrl.enable_ble();
     clkgen.enable_ble();
     pwr_ctrl.enable_ble();
-    &drivers.ble.setup_clocks();
+    &peripherals.ble.setup_clocks();
     mcu_ctrl.reset_ble();
-    &drivers.ble.power_up();
-    &drivers.ble.ble_initialise();
+    &peripherals.ble.power_up();
+    &peripherals.ble.ble_initialise();
 
-    let ble_radio = ble::BLEComponent::new(board_kernel, &drivers.ble, mux_alarm).finalize(());
+    let ble_radio = ble::BLEComponent::new(board_kernel, &peripherals.ble, mux_alarm).finalize(());
 
     mcu_ctrl.print_chip_revision();
 
@@ -229,8 +232,8 @@ pub unsafe fn reset_handler() {
     );
 
     let chip = static_init!(
-        apollo3::chip::Apollo3<Apollo3Drivers>,
-        apollo3::chip::Apollo3::new(drivers)
+        apollo3::chip::Apollo3<Apollo3Peripherals>,
+        apollo3::chip::Apollo3::new(peripherals)
     );
     CHIP = Some(chip);
 
