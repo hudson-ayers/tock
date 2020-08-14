@@ -56,7 +56,7 @@ pub struct ClkGen {
 }
 
 impl ClkGen {
-    pub unsafe fn new() -> ClkGen {
+    pub const fn new() -> ClkGen {
         ClkGen {
             registers: CLKGEN_BASE,
         }

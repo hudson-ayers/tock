@@ -176,7 +176,7 @@ pub struct UartParams {
 
 impl Uart<'_> {
     // unsafe bc of UART0_BASE usage, called twice would alias location
-    pub unsafe fn new_uart_0() -> Self {
+    pub const fn new_uart_0() -> Self {
         Self {
             registers: UART0_BASE,
             clock_frequency: 24_000_000,
@@ -189,7 +189,7 @@ impl Uart<'_> {
     }
 
     // unsafe bc of UART0_BASE usage, called twice would alias location
-    pub unsafe fn new_uart_1() -> Self {
+    pub const fn new_uart_1() -> Self {
         Self {
             registers: UART1_BASE,
             clock_frequency: 24_000_000,

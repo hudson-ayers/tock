@@ -50,7 +50,7 @@ pub struct CacheCtrl {
 }
 
 impl CacheCtrl {
-    pub unsafe fn new() -> CacheCtrl {
+    pub const fn new() -> CacheCtrl {
         CacheCtrl {
             registers: CACHECTRL_BASE,
         }

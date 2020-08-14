@@ -95,7 +95,7 @@ pub struct STimer<'a> {
 
 impl<'a> STimer<'_> {
     // Unsafe bc of use of STIMER_BASE internally
-    pub unsafe fn new() -> STimer<'a> {
+    pub const fn new() -> STimer<'a> {
         STimer {
             registers: STIMER_BASE,
             client: OptionalCell::empty(),

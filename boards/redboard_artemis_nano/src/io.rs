@@ -32,10 +32,8 @@ impl Write for Writer {
 
 impl IoWrite for Writer {
     fn write(&mut self, buf: &[u8]) {
-        unsafe {
-            let uart = apollo3::uart::Uart::new_uart_0(); // Aliases memory for uart0. Okay bc we are panicking.
-            uart.transmit_sync(buf);
-        }
+        let uart = apollo3::uart::Uart::new_uart_0(); // Aliases memory for uart0. Okay bc we are panicking.
+        uart.transmit_sync(buf);
     }
 }
 

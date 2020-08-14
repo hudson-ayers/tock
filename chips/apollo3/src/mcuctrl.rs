@@ -105,7 +105,7 @@ pub struct McuCtrl {
 }
 
 impl McuCtrl {
-    pub unsafe fn new() -> McuCtrl {
+    pub const fn new() -> McuCtrl {
         McuCtrl {
             registers: MCUCTRL_BASE,
         }

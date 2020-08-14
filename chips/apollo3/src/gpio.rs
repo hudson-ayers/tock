@@ -18,7 +18,7 @@ pub struct Port<'a> {
 }
 
 impl<'a> Port<'a> {
-    pub unsafe fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             pins: [
                 GpioPin::new(GPIO_BASE, Pin::Pin00),
@@ -485,7 +485,7 @@ pub struct GpioPin<'a> {
 }
 
 impl<'a> GpioPin<'a> {
-    pub fn new(base: StaticRef<GpioRegisters>, pin: Pin) -> GpioPin<'a> {
+    pub const fn new(base: StaticRef<GpioRegisters>, pin: Pin) -> GpioPin<'a> {
         GpioPin {
             registers: base,
             pin,

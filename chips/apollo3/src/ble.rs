@@ -266,7 +266,7 @@ pub struct Ble<'a> {
 }
 
 impl<'a> Ble<'a> {
-    pub unsafe fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             registers: BLE_BASE,
             rx_client: OptionalCell::empty(),

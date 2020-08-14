@@ -274,7 +274,7 @@ pub struct Iom<'a> {
 }
 
 impl<'a> Iom<'_> {
-    pub unsafe fn new0() -> Iom<'a> {
+    pub const fn new0() -> Iom<'a> {
         Iom {
             registers: IOM0_BASE,
             master_client: OptionalCell::empty(),
@@ -286,7 +286,7 @@ impl<'a> Iom<'_> {
             smbus: Cell::new(false),
         }
     }
-    pub unsafe fn new1() -> Iom<'a> {
+    pub const fn new1() -> Iom<'a> {
         Iom {
             registers: IOM1_BASE,
             master_client: OptionalCell::empty(),
@@ -298,7 +298,7 @@ impl<'a> Iom<'_> {
             smbus: Cell::new(false),
         }
     }
-    pub unsafe fn new2() -> Iom<'a> {
+    pub const fn new2() -> Iom<'a> {
         Iom {
             registers: IOM2_BASE,
             master_client: OptionalCell::empty(),
@@ -310,7 +310,7 @@ impl<'a> Iom<'_> {
             smbus: Cell::new(false),
         }
     }
-    pub unsafe fn new3() -> Iom<'a> {
+    pub const fn new3() -> Iom<'a> {
         Iom {
             registers: IOM3_BASE,
             master_client: OptionalCell::empty(),
@@ -322,7 +322,7 @@ impl<'a> Iom<'_> {
             smbus: Cell::new(false),
         }
     }
-    pub unsafe fn new4() -> Iom<'a> {
+    pub const fn new4() -> Iom<'a> {
         Iom {
             registers: IOM4_BASE,
             master_client: OptionalCell::empty(),
@@ -334,7 +334,7 @@ impl<'a> Iom<'_> {
             smbus: Cell::new(false),
         }
     }
-    pub unsafe fn new5() -> Iom<'a> {
+    pub const fn new5() -> Iom<'a> {
         Iom {
             registers: IOM5_BASE,
             master_client: OptionalCell::empty(),

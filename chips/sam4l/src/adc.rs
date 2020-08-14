@@ -323,7 +323,6 @@ const BASE_ADDRESS: StaticRef<AdcRegisters> =
 impl Adc {
     /// Create a new ADC driver.
     ///
-    /// - `base_address`: pointer to the ADC's memory mapped I/O registers
     /// - `rx_dma_peripheral`: type used for DMA transactions
     pub const fn new(rx_dma_peripheral: dma::DMAPeripheral, pm: &'static pm::PowerManager) -> Adc {
         Adc {

@@ -70,7 +70,7 @@ pub struct PwrCtrl {
 }
 
 impl PwrCtrl {
-    pub unsafe fn new() -> PwrCtrl {
+    pub const fn new() -> PwrCtrl {
         PwrCtrl {
             registers: PWRCTRL_BASE,
         }
