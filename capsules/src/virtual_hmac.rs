@@ -133,7 +133,7 @@ pub struct MuxHmac<'a, A: digest::Digest<'a, T>, T: DigestType> {
 }
 
 impl<'a, A: digest::Digest<'a, T>, T: DigestType> MuxHmac<'a, A, T> {
-    pub fn new(hmac: &'a A) -> MuxHmac<'a, A, T> {
+    pub const fn new(hmac: &'a A) -> MuxHmac<'a, A, T> {
         MuxHmac {
             hmac,
             running: Cell::new(false),

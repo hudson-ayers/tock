@@ -137,7 +137,7 @@ pub struct MuxDigest<'a, A: digest::Digest<'a, T>, T: DigestType> {
 }
 
 impl<'a, A: digest::Digest<'a, T>, T: DigestType> MuxDigest<'a, A, T> {
-    pub fn new(digest: &'a A) -> MuxDigest<'a, A, T> {
+    pub const fn new(digest: &'a A) -> MuxDigest<'a, A, T> {
         MuxDigest {
             digest: digest,
             running: Cell::new(false),

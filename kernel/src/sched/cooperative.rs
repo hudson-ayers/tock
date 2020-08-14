@@ -43,7 +43,7 @@ pub struct CooperativeSched<'a> {
 }
 
 impl<'a> CooperativeSched<'a> {
-    pub fn new() -> CooperativeSched<'a> {
+    pub const fn new() -> CooperativeSched<'a> {
         CooperativeSched {
             processes: List::new(),
         }

@@ -118,7 +118,7 @@ pub struct MuxAlarm<'a, A: Alarm<'a>> {
 }
 
 impl<'a, A: Alarm<'a>> MuxAlarm<'a, A> {
-    pub fn new(alarm: &'a A) -> MuxAlarm<'a, A> {
+    pub const fn new(alarm: &'a A) -> MuxAlarm<'a, A> {
         MuxAlarm {
             virtual_alarms: List::new(),
             enabled: Cell::new(0),

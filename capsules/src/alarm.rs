@@ -42,7 +42,7 @@ pub struct AlarmDriver<'a, A: Alarm<'a>> {
 }
 
 impl<'a, A: Alarm<'a>> AlarmDriver<'a, A> {
-    pub fn new(alarm: &'a A, grant: Grant<AlarmData>) -> AlarmDriver<'a, A> {
+    pub const fn new(alarm: &'a A, grant: Grant<AlarmData>) -> AlarmDriver<'a, A> {
         AlarmDriver {
             alarm: alarm,
             num_armed: Cell::new(0),
