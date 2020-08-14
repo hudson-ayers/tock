@@ -259,12 +259,10 @@ impl<I: InterruptService<Task> + 'static> Chip for Sam4l<I> {
                         true => {}
                         false => panic!("unhandled deferred call task"),
                     }
-                //match task {
-                //}
                 } else if let Some(interrupt) = cortexm4::nvic::next_pending() {
                     match self.interrupt_service.service_interrupt(interrupt) {
-                        false => panic!("unhandled interrupt"),
                         true => {}
+                        false => panic!("unhandled interrupt"),
                     }
                     let n = cortexm4::nvic::Nvic::new(interrupt);
                     n.clear_pending();
