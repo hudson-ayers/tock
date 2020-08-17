@@ -29,7 +29,7 @@ RUSTC_FLAGS ?= \
   -C linker=rust-lld \
   -C linker-flavor=ld.lld \
   -C relocation-model=dynamic-no-pic \
-  -C link-arg=-zmax-page-size=512 \
+  -C link-arg=-nmagic \
   -C link-arg=-icf=all \
 
 # RISC-V-specific flags.

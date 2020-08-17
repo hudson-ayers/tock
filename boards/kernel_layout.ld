@@ -184,21 +184,6 @@ SECTIONS
     } > rom
     PROVIDE_HIDDEN (__exidx_end = .);
 
-    /* Region for on-chip kernel non-volatile storage.
-     *
-     * Align on 512 bytes since that is the page size. Volumes within this
-     * region are allocated with the storage_volume! macro in utils.rs.
-     */
-    .storage :
-    {
-      . = ALIGN(512);
-      _sstorage = .;
-      *(.storage* storage*)
-      _estorage = .;
-      . = ALIGN(512);
-    } > rom
-    . = ALIGN(512);
-
     /* Mark the end of static elements */
     . = ALIGN(4);
     _etext = .;

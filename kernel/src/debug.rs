@@ -104,7 +104,7 @@ pub unsafe fn panic<L: hil::led::Led, W: Write + IoWrite, C: Chip>(
     // Flush debug buffer if needed
     flush(writer);
     panic_cpu_state(chip, writer);
-    panic_process_info(processes, writer);
+    //panic_process_info(processes, writer);
     panic_blink_forever(leds)
 }
 
