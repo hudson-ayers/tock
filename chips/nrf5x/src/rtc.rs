@@ -1,5 +1,6 @@
 //! RTC driver, nRF5X-family
 
+use core::cell::Cell;
 use kernel::common::cells::OptionalCell;
 use kernel::common::registers::{register_bitfields, ReadOnly, ReadWrite, WriteOnly};
 use kernel::common::StaticRef;
@@ -84,14 +85,33 @@ register_bitfields![u32,
 
 pub struct Rtc<'a> {
     registers: StaticRef<RtcRegisters>,
-    callback: OptionalCell<&'a dyn time::AlarmClient>,
+    alarm_client: OptionalCell<&'a dyn time::AlarmClient>,
+    enabled: Cell<bool>,
 }
 
-pub static mut RTC: Rtc = Rtc {
-    registers: RTC1_BASE,
-    callback: OptionalCell::empty(),
-};
+impl<'a> Rtc<'a> {
+    pub const fn new() -> Self {
+        Self {
+            registers: RTC1_BASE,
+            alarm_client: OptionalCell::empty(),
+            enabled: Cell::new(false),
+        }
+    }
 
+    pub fn handle_interrupt(&self) {
+        if self.registers.events_ovrflw.is_set(Event::READY) {
+            self.registers.events_ovrflw.write(Event::READY::CLEAR);
+        }
+        if self.registers.events_compare[0].is_set(Event::READY) {
+            self.registers.intenclr.write(Inte::COMPARE0::SET);
+            self.registers.events_compare[0].write(Event::READY::CLEAR);
+            self.alarm_client.map(|client| {
+                client.fired();
+            });
+        }
+    }
+}
+/*
 impl<'a> Controller for Rtc<'a> {
     type Config = &'a dyn time::AlarmClient;
 
@@ -103,7 +123,7 @@ impl<'a> Controller for Rtc<'a> {
         // Set counter incrementing frequency to 16KHz
         // rtc1().prescaler.set(1);
     }
-}
+}*/
 
 impl<'a> Rtc<'a> {
     pub fn start(&self) {
@@ -121,14 +141,6 @@ impl<'a> Rtc<'a> {
     fn is_running(&self) -> bool {
         self.registers.evten.is_set(Inte::COMPARE0)
     }
-
-    pub fn handle_interrupt(&self) {
-        self.registers.events_compare[0].write(Event::READY::CLEAR);
-        self.registers.intenclr.write(Inte::COMPARE0::SET);
-        self.callback.map(|cb| {
-            cb.fired();
-        });
-    }
 }
 
 impl Time for Rtc<'_> {
@@ -145,7 +157,7 @@ impl Time for Rtc<'_> {
 
 impl<'a> Alarm<'a> for Rtc<'a> {
     fn set_client(&self, client: &'a dyn time::AlarmClient) {
-        self.callback.set(client);
+        self.alarm_client.set(client);
     }
 
     fn set_alarm(&self, tics: u32) {
