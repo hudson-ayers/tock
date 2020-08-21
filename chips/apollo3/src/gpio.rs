@@ -91,6 +91,7 @@ impl<'a> IndexMut<usize> for Port<'a> {
 }
 
 impl Port<'_> {
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs = GPIO_BASE;
         let mut irqs = regs.int0stat.get();
