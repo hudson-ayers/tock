@@ -352,6 +352,7 @@ impl<'a> Ble<'a> {
         self.registers.blecfg.modify(BLECFG::WAKEUPCTL::OFF);
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let irqs = self.registers.intstat.extract();
 

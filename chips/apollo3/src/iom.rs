@@ -461,6 +461,7 @@ impl<'a> Iom<'_> {
         });
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs = self.registers;
         let irqs = regs.intstat.extract();
