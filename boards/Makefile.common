@@ -31,6 +31,7 @@ RUSTC_FLAGS ?= \
   -C relocation-model=dynamic-no-pic \
   -C link-arg=-zmax-page-size=512 \
   -C link-arg=-icf=all \
+	--emit=mir \
 
 # RISC-V-specific flags.
 ifneq ($(findstring riscv32i, $(TARGET)),)
@@ -47,7 +48,7 @@ endif
 # reporting from appearing in the generated binary.
 RUSTC_FLAGS_TOCK ?= \
   $(RUSTC_FLAGS) \
-  --remap-path-prefix=$(TOCK_ROOT_DIRECTORY)= \
+  #--remap-path-prefix=$(TOCK_ROOT_DIRECTORY)= \
 
 # Disallow warnings for continuous integration builds. Disallowing them here
 # ensures that warnings during testing won't prevent compilation from succeeding.
@@ -75,7 +76,7 @@ endif
 # the final binary crate (being passed as parameter to `cargo rustc`).
 RUSTC_FLAGS_FOR_BIN ?= \
   -C link-arg=-L$(abspath .) \
-	--emit=llvm-ir --emit=llvm-bc \
+  --emit=llvm-ir --emit=llvm-bc --emit=mir \
 
 # http://stackoverflow.com/questions/10858261/abort-makefile-if-variable-not-set
 # Check that given variables are set and all have non-empty values, print an

@@ -258,6 +258,7 @@ impl Uart<'_> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs = self.registers;
         let irq = regs.ies.extract();
