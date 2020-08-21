@@ -87,10 +87,14 @@ pub struct Rtc<'a> {
     callback: OptionalCell<&'a dyn time::AlarmClient>,
 }
 
-pub static mut RTC: Rtc = Rtc {
-    registers: RTC1_BASE,
-    callback: OptionalCell::empty(),
-};
+impl<'a> Rtc<'a> {
+    pub const fn new() -> Self {
+        Self {
+            registers: RTC1_BASE,
+            callback: OptionalCell::empty(),
+        }
+    }
+}
 
 impl<'a> Controller for Rtc<'a> {
     type Config = &'a dyn time::AlarmClient;
