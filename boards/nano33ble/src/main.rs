@@ -53,7 +53,8 @@ const NUM_PROCS: usize = 8;
 
 static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] = [None; 8];
 
-static mut CHIP: Option<&'static nrf52840::chip::Chip> = None;
+nrf52840::create_default_nrf52840_peripherals!(Nrf52840Peripherals);
+static mut CHIP: Option<&'static nrf52840::chip::NRF52<Nrf52840Peripherals>> = None;
 
 /// Dummy buffer that causes the linker to reserve enough space for the stack.
 #[no_mangle]
@@ -103,6 +104,13 @@ impl kernel::Platform for Platform {
 pub unsafe fn reset_handler() {
     // Loads relocations and clears BSS
     nrf52840::init();
+    let ppi = static_init!(nrf52840::ppi::Ppi, nrf52840::ppi::Ppi::new());
+    // Initialize chip peripheral drivers
+    let nrf52840_peripherals = static_init!(Nrf52840Peripherals, Nrf52840Peripherals::new(ppi));
+
+    // set up circular peripheral dependencies
+    nrf52840_peripherals.init();
+    let base_peripherals = &nrf52840_peripherals.nrf52_base;
 
     let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new(&PROCESSES));
 
@@ -124,7 +132,11 @@ pub unsafe fn reset_handler() {
     // Configure kernel debug GPIOs as early as possible. These are used by the
     // `debug_gpio!(0, toggle)` macro. We configure these early so that the
     // macro is available during most of the setup code and kernel execution.
-    kernel::debug::assign_gpios(Some(&nrf52840::gpio::PORT[LED_KERNEL_PIN]), None, None);
+    kernel::debug::assign_gpios(
+        Some(&base_peripherals.gpio_port[LED_KERNEL_PIN]),
+        None,
+        None,
+    );
 
     //--------------------------------------------------------------------------
     // GPIO
@@ -134,15 +146,15 @@ pub unsafe fn reset_handler() {
         board_kernel,
         components::gpio_component_helper!(
             nrf52840::gpio::GPIOPin,
-            2 => &nrf52840::gpio::PORT[GPIO_D2],
-            3 => &nrf52840::gpio::PORT[GPIO_D3],
-            4 => &nrf52840::gpio::PORT[GPIO_D4],
-            5 => &nrf52840::gpio::PORT[GPIO_D5],
-            6 => &nrf52840::gpio::PORT[GPIO_D6],
-            7 => &nrf52840::gpio::PORT[GPIO_D7],
-            8 => &nrf52840::gpio::PORT[GPIO_D8],
-            9 => &nrf52840::gpio::PORT[GPIO_D9],
-            10 => &nrf52840::gpio::PORT[GPIO_D10]
+            2 => &base_peripherals.gpio_port[GPIO_D2],
+            3 => &base_peripherals.gpio_port[GPIO_D3],
+            4 => &base_peripherals.gpio_port[GPIO_D4],
+            5 => &base_peripherals.gpio_port[GPIO_D5],
+            6 => &base_peripherals.gpio_port[GPIO_D6],
+            7 => &base_peripherals.gpio_port[GPIO_D7],
+            8 => &base_peripherals.gpio_port[GPIO_D8],
+            9 => &base_peripherals.gpio_port[GPIO_D9],
+            10 => &base_peripherals.gpio_port[GPIO_D10]
         ),
     )
     .finalize(components::gpio_component_buf!(nrf52840::gpio::GPIOPin));
@@ -153,9 +165,9 @@ pub unsafe fn reset_handler() {
 
     let led = components::led::LedsComponent::new(components::led_component_helper!(
         nrf52840::gpio::GPIOPin,
-        (&nrf52840::gpio::PORT[LED_RED_PIN], ActiveLow),
-        (&nrf52840::gpio::PORT[LED_GREEN_PIN], ActiveLow),
-        (&nrf52840::gpio::PORT[LED_BLUE_PIN], ActiveLow)
+        (&base_peripherals.gpio_port[LED_RED_PIN], ActiveLow),
+        (&base_peripherals.gpio_port[LED_GREEN_PIN], ActiveLow),
+        (&base_peripherals.gpio_port[LED_BLUE_PIN], ActiveLow)
     ))
     .finalize(components::led_component_buf!(nrf52840::gpio::GPIOPin));
 
@@ -175,7 +187,7 @@ pub unsafe fn reset_handler() {
     // ALARM & TIMER
     //--------------------------------------------------------------------------
 
-    let rtc = &nrf52::rtc::RTC;
+    let rtc = &base_peripherals.rtc;
     rtc.start();
 
     let mux_alarm = components::alarm::AlarmMuxComponent::new(rtc)
@@ -205,7 +217,7 @@ pub unsafe fn reset_handler() {
     );
 
     let cdc = components::cdc::CdcAcmComponent::new(
-        &nrf52::usbd::USBD,
+        &nrf52840_peripherals.usbd,
         capsules::usb::cdc::MAX_CTRL_PACKET_SIZE_NRF52840,
         0x2341,
         0x005a,
@@ -226,18 +238,18 @@ pub unsafe fn reset_handler() {
     // RANDOM NUMBERS
     //--------------------------------------------------------------------------
 
-    let rng = components::rng::RngComponent::new(board_kernel, &nrf52::trng::TRNG).finalize(());
+    let rng = components::rng::RngComponent::new(board_kernel, &base_peripherals.trng).finalize(());
 
     //--------------------------------------------------------------------------
     // WIRELESS
     //--------------------------------------------------------------------------
 
     // let ble_radio =
-    //     BLEComponent::new(board_kernel, &nrf52::ble_radio::RADIO, mux_alarm).finalize(());
+    //     BLEComponent::new(board_kernel, &base_peripherals.ble_radio, mux_alarm).finalize(());
 
     // let (ieee802154_radio, _) = Ieee802154Component::new(
     //     board_kernel,
-    //     &nrf52::ieee802154_radio::RADIO,
+    //     &base_peripherals.ieee802154_radio,
     //     PAN_ID,
     //     SRC_MAC,
     // )
@@ -262,7 +274,10 @@ pub unsafe fn reset_handler() {
         ipc: kernel::ipc::IPC::new(board_kernel, &memory_allocation_capability),
     };
 
-    let chip = static_init!(nrf52840::chip::Chip, nrf52840::chip::new());
+    let chip = static_init!(
+        nrf52840::chip::NRF52<Nrf52840Peripherals>,
+        nrf52840::chip::NRF52::new(nrf52840_peripherals)
+    );
     CHIP = Some(chip);
 
     // Need to disable the MPU because the bootloader seems to set it up.
