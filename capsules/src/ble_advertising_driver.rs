@@ -343,7 +343,7 @@ where
         let now = self.alarm.now();
         let mut next_alarm = u32::max_value();
         let mut next_dist = u32::max_value();
-        for app in self.app.iter() {
+        for app in self.app.iter().take(4) {
             app.enter(|app, _| match app.alarm_data.expiration {
                 Expiration::Abs(exp) => {
                     let t_dist = exp.wrapping_sub(now);
@@ -355,6 +355,7 @@ where
                 Expiration::Disabled => {}
             });
         }
+
         if next_alarm != u32::max_value() {
             self.alarm.set_alarm(next_alarm);
         }
