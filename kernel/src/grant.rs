@@ -284,7 +284,7 @@ impl<T: Default> Grant<T> {
 pub struct Iter<'a, T: 'a + Default> {
     grant: &'a Grant<T>,
     subiter: core::iter::FilterMap<
-        core::slice::Iter<'a, Option<&'static dyn ProcessType>>,
+        core::iter::Take<core::slice::Iter<'a, Option<&'static dyn ProcessType>>>,
         fn(&Option<&'static dyn ProcessType>) -> Option<&'static dyn ProcessType>,
     >,
 }
