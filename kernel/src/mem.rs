@@ -34,6 +34,7 @@ impl<L, T> AppPtr<L, T> {
     }
 }
 
+/*
 impl<L, T> Drop for AppPtr<L, T> {
     fn drop(&mut self) {
         self.process
@@ -42,7 +43,7 @@ impl<L, T> Drop for AppPtr<L, T> {
                 process.free(self.ptr.as_ptr() as *mut u8)
             })
     }
-}
+}*/
 
 /// Buffer of memory shared from an app to the kernel.
 ///
