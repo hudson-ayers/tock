@@ -18,6 +18,7 @@ use kernel::Chip;
 use kernel::{create_capability, debug, debug_gpio, debug_verbose, static_init};
 
 use nrf52840::gpio::Pin;
+use nrf52840::interrupt_service::Nrf52840DefaultPeripherals;
 
 // Three-color LED.
 const LED_RED_PIN: Pin = Pin::P0_24;
@@ -53,8 +54,7 @@ const NUM_PROCS: usize = 8;
 
 static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] = [None; 8];
 
-nrf52840::create_default_nrf52840_peripherals!(Nrf52840Peripherals);
-static mut CHIP: Option<&'static nrf52840::chip::NRF52<Nrf52840Peripherals>> = None;
+static mut CHIP: Option<&'static nrf52840::chip::NRF52<Nrf52840DefaultPeripherals>> = None;
 
 /// Dummy buffer that causes the linker to reserve enough space for the stack.
 #[no_mangle]
@@ -106,7 +106,10 @@ pub unsafe fn reset_handler() {
     nrf52840::init();
     let ppi = static_init!(nrf52840::ppi::Ppi, nrf52840::ppi::Ppi::new());
     // Initialize chip peripheral drivers
-    let nrf52840_peripherals = static_init!(Nrf52840Peripherals, Nrf52840Peripherals::new(ppi));
+    let nrf52840_peripherals = static_init!(
+        Nrf52840DefaultPeripherals,
+        Nrf52840DefaultPeripherals::new(ppi)
+    );
 
     // set up circular peripheral dependencies
     nrf52840_peripherals.init();
@@ -275,7 +278,7 @@ pub unsafe fn reset_handler() {
     };
 
     let chip = static_init!(
-        nrf52840::chip::NRF52<Nrf52840Peripherals>,
+        nrf52840::chip::NRF52<Nrf52840DefaultPeripherals>,
         nrf52840::chip::NRF52::new(nrf52840_peripherals)
     );
     CHIP = Some(chip);
