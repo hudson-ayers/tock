@@ -9,6 +9,7 @@
 #![feature(const_in_array_repeat_expressions)]
 #![deny(missing_docs)]
 
+use apollo3::chip::Apollo3DefaultPeripherals;
 use capsules::virtual_alarm::VirtualMuxAlarm;
 use kernel::capabilities;
 use kernel::common::dynamic_deferred_call::DynamicDeferredCall;
@@ -28,11 +29,8 @@ const NUM_PROCS: usize = 4;
 // Actual memory for holding the active process structures.
 static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] = [None; 4];
 
-// Instantiate Apollo3Peripherals struct
-apollo3::create_default_apollo3_peripherals!(Apollo3Peripherals);
-
 // Static reference to chip for panic dumps.
-static mut CHIP: Option<&'static apollo3::chip::Apollo3<Apollo3Peripherals>> = None;
+static mut CHIP: Option<&'static apollo3::chip::Apollo3<Apollo3DefaultPeripherals>> = None;
 
 // How should the kernel respond when a process faults.
 const FAULT_RESPONSE: kernel::procs::FaultResponse = kernel::procs::FaultResponse::Panic;
@@ -88,7 +86,7 @@ impl Platform for RedboardArtemisNano {
 pub unsafe fn reset_handler() {
     apollo3::init();
 
-    let peripherals = static_init!(Apollo3Peripherals, Apollo3Peripherals::new());
+    let peripherals = static_init!(Apollo3DefaultPeripherals, Apollo3DefaultPeripherals::new());
 
     // No need to statically allocate mcu/pwr/clk_ctrl because they are only used in main!
     let mcu_ctrl = apollo3::mcuctrl::McuCtrl::new();
@@ -231,7 +229,7 @@ pub unsafe fn reset_handler() {
     );
 
     let chip = static_init!(
-        apollo3::chip::Apollo3<Apollo3Peripherals>,
+        apollo3::chip::Apollo3<Apollo3DefaultPeripherals>,
         apollo3::chip::Apollo3::new(peripherals)
     );
     CHIP = Some(chip);

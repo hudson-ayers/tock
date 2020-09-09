@@ -23,6 +23,7 @@ use kernel::Platform;
 #[allow(unused_imports)]
 use kernel::{create_capability, debug, debug_gpio, static_init};
 use sam4l::adc::Channel;
+use sam4l::chip::Sam4lDefaultPeripherals;
 
 /// Support routines for debugging I/O.
 ///
@@ -40,9 +41,7 @@ const NUM_PROCS: usize = 20;
 static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] =
     [None; NUM_PROCS];
 
-sam4l::create_default_sam4l_peripherals!(Sam4lPeripherals);
-
-static mut CHIP: Option<&'static sam4l::chip::Sam4l<Sam4lPeripherals>> = None;
+static mut CHIP: Option<&'static sam4l::chip::Sam4l<Sam4lDefaultPeripherals>> = None;
 
 /// Dummy buffer that causes the linker to reserve enough space for the stack.
 #[no_mangle]
@@ -107,7 +106,7 @@ impl Platform for Hail {
 }
 
 /// Helper function called during bring-up that configures multiplexed I/O.
-unsafe fn set_pin_primary_functions(peripherals: &Sam4lPeripherals) {
+unsafe fn set_pin_primary_functions(peripherals: &Sam4lDefaultPeripherals) {
     use sam4l::gpio::PeripheralFunction::{A, B};
 
     peripherals.pa[04].configure(Some(A)); // A0 - ADC0
@@ -177,7 +176,7 @@ unsafe fn set_pin_primary_functions(peripherals: &Sam4lPeripherals) {
 pub unsafe fn reset_handler() {
     sam4l::init();
     let pm = static_init!(sam4l::pm::PowerManager, sam4l::pm::PowerManager::new());
-    let peripherals = static_init!(Sam4lPeripherals, Sam4lPeripherals::new(pm));
+    let peripherals = static_init!(Sam4lDefaultPeripherals, Sam4lDefaultPeripherals::new(pm));
 
     pm.setup_system_clock(
         sam4l::pm::SystemClockSource::PllExternalOscillatorAt48MHz {
@@ -193,7 +192,7 @@ pub unsafe fn reset_handler() {
     set_pin_primary_functions(peripherals);
     peripherals.setup_dma();
     let chip = static_init!(
-        sam4l::chip::Sam4l<Sam4lPeripherals>,
+        sam4l::chip::Sam4l<Sam4lDefaultPeripherals>,
         sam4l::chip::Sam4l::new(pm, peripherals)
     );
     CHIP = Some(chip);

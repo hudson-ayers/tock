@@ -23,69 +23,64 @@ impl<I: InterruptService<()> + 'static> Apollo3<I> {
     }
 }
 
-/// This macro defines a struct that, when initialized,
-/// instantiates all peripheral drivers for the apollo3. If a board
-/// wishes to use only a subset of these peripherals, this
-/// macro cannot be used, and this struct should be
-/// constructed manually in main.rs. The input to the macro is the name of the struct
-/// that will hold the peripherals, which can be chosen by the board.
-#[macro_export]
-macro_rules! create_default_apollo3_peripherals {
-    ($N:ident) => {
-        struct $N {
-            stimer: apollo3::stimer::STimer<'static>,
-            uart0: apollo3::uart::Uart<'static>,
-            uart1: apollo3::uart::Uart<'static>,
-            gpio_port: apollo3::gpio::Port<'static>,
-            iom0: apollo3::iom::Iom<'static>,
-            iom1: apollo3::iom::Iom<'static>,
-            iom2: apollo3::iom::Iom<'static>,
-            iom3: apollo3::iom::Iom<'static>,
-            iom4: apollo3::iom::Iom<'static>,
-            iom5: apollo3::iom::Iom<'static>,
-            ble: apollo3::ble::Ble<'static>,
+/// This struct, when initialized, instantiates all peripheral drivers for the apollo3.
+/// If a board wishes to use only a subset of these peripherals, this
+/// should not be used or imported, and a modified version should be
+/// constructed manually in main.rs.
+pub struct Apollo3DefaultPeripherals {
+    pub stimer: crate::stimer::STimer<'static>,
+    pub uart0: crate::uart::Uart<'static>,
+    pub uart1: crate::uart::Uart<'static>,
+    pub gpio_port: crate::gpio::Port<'static>,
+    pub iom0: crate::iom::Iom<'static>,
+    pub iom1: crate::iom::Iom<'static>,
+    pub iom2: crate::iom::Iom<'static>,
+    pub iom3: crate::iom::Iom<'static>,
+    pub iom4: crate::iom::Iom<'static>,
+    pub iom5: crate::iom::Iom<'static>,
+    pub ble: crate::ble::Ble<'static>,
+}
+
+impl Apollo3DefaultPeripherals {
+    pub fn new() -> Self {
+        Self {
+            stimer: crate::stimer::STimer::new(),
+            uart0: crate::uart::Uart::new_uart_0(),
+            uart1: crate::uart::Uart::new_uart_1(),
+            gpio_port: crate::gpio::Port::new(),
+            iom0: crate::iom::Iom::new0(),
+            iom1: crate::iom::Iom::new1(),
+            iom2: crate::iom::Iom::new2(),
+            iom3: crate::iom::Iom::new3(),
+            iom4: crate::iom::Iom::new4(),
+            iom5: crate::iom::Iom::new5(),
+            ble: crate::ble::Ble::new(),
         }
-        impl $N {
-            unsafe fn new() -> Self {
-                Self {
-                    stimer: apollo3::stimer::STimer::new(),
-                    uart0: apollo3::uart::Uart::new_uart_0(),
-                    uart1: apollo3::uart::Uart::new_uart_1(),
-                    gpio_port: apollo3::gpio::Port::new(),
-                    iom0: apollo3::iom::Iom::new0(),
-                    iom1: apollo3::iom::Iom::new1(),
-                    iom2: apollo3::iom::Iom::new2(),
-                    iom3: apollo3::iom::Iom::new3(),
-                    iom4: apollo3::iom::Iom::new4(),
-                    iom5: apollo3::iom::Iom::new5(),
-                    ble: apollo3::ble::Ble::new(),
-                }
-            }
+    }
+}
+
+impl kernel::InterruptService<()> for Apollo3DefaultPeripherals {
+    unsafe fn service_interrupt(&self, interrupt: u32) -> bool {
+        use crate::nvic;
+        match interrupt {
+            nvic::STIMER..=nvic::STIMER_CMPR7 => self.stimer.handle_interrupt(),
+            nvic::UART0 => self.uart0.handle_interrupt(),
+            nvic::UART1 => self.uart1.handle_interrupt(),
+            nvic::GPIO => self.gpio_port.handle_interrupt(),
+            nvic::IOMSTR0 => self.iom0.handle_interrupt(),
+            nvic::IOMSTR1 => self.iom1.handle_interrupt(),
+            nvic::IOMSTR2 => self.iom2.handle_interrupt(),
+            nvic::IOMSTR3 => self.iom3.handle_interrupt(),
+            nvic::IOMSTR4 => self.iom4.handle_interrupt(),
+            nvic::IOMSTR5 => self.iom5.handle_interrupt(),
+            nvic::BLE => self.ble.handle_interrupt(),
+            _ => return false,
         }
-        impl kernel::InterruptService<()> for $N {
-            unsafe fn service_interrupt(&self, interrupt: u32) -> bool {
-                use apollo3::nvic;
-                match interrupt {
-                    nvic::STIMER..=nvic::STIMER_CMPR7 => self.stimer.handle_interrupt(),
-                    nvic::UART0 => self.uart0.handle_interrupt(),
-                    nvic::UART1 => self.uart1.handle_interrupt(),
-                    nvic::GPIO => self.gpio_port.handle_interrupt(),
-                    nvic::IOMSTR0 => self.iom0.handle_interrupt(),
-                    nvic::IOMSTR1 => self.iom1.handle_interrupt(),
-                    nvic::IOMSTR2 => self.iom2.handle_interrupt(),
-                    nvic::IOMSTR3 => self.iom3.handle_interrupt(),
-                    nvic::IOMSTR4 => self.iom4.handle_interrupt(),
-                    nvic::IOMSTR5 => self.iom5.handle_interrupt(),
-                    nvic::BLE => self.ble.handle_interrupt(),
-                    _ => return false,
-                }
-                true
-            }
-            unsafe fn service_deferred_call(&self, _: ()) -> bool {
-                false
-            }
-        }
-    };
+        true
+    }
+    unsafe fn service_deferred_call(&self, _: ()) -> bool {
+        false
+    }
 }
 
 impl<I: InterruptService<()> + 'static> Chip for Apollo3<I> {
