@@ -304,6 +304,8 @@ impl CortexMRegion {
         // To compute the mask, we start with all subregions disabled and enable
         // the ones in the inclusive range [min_subregion, max_subregion].
         if let Some((min_subregion, max_subregion)) = subregions {
+            assert!(max_subregion < 8);
+            assert!(min_subregion < 8);
             let mask = (min_subregion..=max_subregion).fold(u8::max_value(), |res, i| {
                 // Enable subregions bit by bit (1 ^ 1 == 0)
                 res ^ (1 << i)
@@ -650,6 +652,7 @@ impl kernel::mpu::MPU for MPU {
                 app_memory_size * 8 / region_size + 1
             }
         };
+        assert!(num_subregions_used <= 8); // max supported subregions
 
         let subregion_size = region_size / 8;
         let subregions_end = region_start + subregion_size * num_subregions_used;

@@ -117,7 +117,7 @@ pub const DRIVER_NUM: usize = driver::NUM::BleAdvertising as usize;
 pub static mut BUF: [u8; PACKET_LENGTH] = [0; PACKET_LENGTH];
 
 const PACKET_ADDR_LEN: usize = 6;
-const PACKET_LENGTH: usize = 39;
+const PACKET_LENGTH: usize = 4;
 const ADV_HEADER_TXADD_OFFSET: usize = 6;
 
 #[derive(PartialEq, Debug)]
@@ -455,7 +455,11 @@ where
                         .scan_buffer
                         .as_mut()
                         .map(|userland| {
-                            for (dst, src) in userland.iter_mut().zip(buf[0..len as usize].iter()) {
+                            for (dst, src) in userland
+                                .iter_mut()
+                                .take(PACKET_LENGTH)
+                                .zip(buf[0..len as usize].iter())
+                            {
                                 *dst = *src;
                             }
                         })
