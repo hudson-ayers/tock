@@ -258,12 +258,14 @@ impl Driver for Console<'_> {
     fn command(&self, cmd_num: usize, arg1: usize, _: usize, appid: AppId) -> ReturnCode {
         match cmd_num {
             0 /* check if present */ => ReturnCode::SUCCESS,
+            /*
             1 /* putstr */ => {
                 let len = arg1;
                 self.apps.enter(appid, |app, _| {
+                    //ReturnCode::SUCCESS
                     self.send_new(appid, app, len)
                 }).unwrap_or_else(|err| err.into())
-            },
+            },*/
             2 /* getnstr */ => {
                 let len = arg1;
                 self.apps.enter(appid, |app, _| {
