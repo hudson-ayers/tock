@@ -294,6 +294,7 @@ impl<'a> Ast<'a> {
         regs.cv.read(Value::VALUE)
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         self.clear_alarm();
         self.callback.map(|cb| {

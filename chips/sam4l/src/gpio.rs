@@ -272,6 +272,7 @@ impl<'a> Port<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let port: &GpioRegisters = &*self.port;
 
@@ -428,6 +429,7 @@ impl<'a> GPIOPin<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         self.client.map(|client| {
             client.fired();

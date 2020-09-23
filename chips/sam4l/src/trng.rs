@@ -60,6 +60,7 @@ impl<'a> Trng<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs = &*self.regs;
 

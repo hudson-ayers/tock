@@ -130,6 +130,7 @@ impl Dac {
     }
 
     // Not currently using interrupt.
+    #[inline(never)]
     pub fn handle_interrupt(&self) {}
 }
 

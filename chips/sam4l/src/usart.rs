@@ -616,6 +616,7 @@ impl<'a> USART<'a> {
         self.abort_tx(usart, ReturnCode::FAIL);
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let usart = &USARTRegManager::new(&self);
 

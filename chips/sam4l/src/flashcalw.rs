@@ -483,6 +483,7 @@ impl FLASHCALW {
         regs.sr.is_set(PicoCacheStatus::CSTS)
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs: &FlashcalwRegisters = &*self.registers;
 

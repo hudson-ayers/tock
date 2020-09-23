@@ -422,6 +422,7 @@ impl SpiHw {
         self.dma_write.set(write);
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let spi = &SpiRegisterManager::new(&self);
 

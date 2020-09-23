@@ -244,6 +244,7 @@ impl DMAChannel {
         self.enabled.get()
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let registers: &DMARegisters = &*self.registers;
         registers

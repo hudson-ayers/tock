@@ -297,6 +297,7 @@ impl Crccu<'_> {
     }
 
     /// Handle an interrupt from the CRCCU
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs: &CrccuRegisters = &*self.registers;
 

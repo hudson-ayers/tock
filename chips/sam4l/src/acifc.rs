@@ -330,6 +330,7 @@ impl<'a> Acifc<'a> {
     /// doesn't fire anymore until the condition is false (e.g. Vinp < Vinn).
     /// This way we won't get a barrage of interrupts as soon as Vinp > Vinn:
     /// we'll get just one.
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs = ACIFC_BASE;
 

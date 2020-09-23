@@ -369,6 +369,7 @@ impl<'a> Aes<'a> {
     /// Handle an interrupt, which will indicate either that the AESA's input
     /// buffer is ready for more data, or that it has completed a block of output
     /// for us to consume
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         if !self.busy() {
             // Ignore errant interrupts, in case it's possible for the AES interrupt flag

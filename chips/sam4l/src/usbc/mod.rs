@@ -750,6 +750,7 @@ impl<'a> Usbc<'a> {
     }
 
     /// Handle an interrupt from the USBC
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         self.map_state(|state| match *state {
             State::Reset => internal_err!("Received interrupt in Reset"),

@@ -259,6 +259,7 @@ impl<'a> Eic<'a> {
     }
 
     /// Executes client function when an interrupt is triggered.
+    #[inline(never)]
     pub fn handle_interrupt(&self, line: &Line) {
         // Clears interrupt bit and then handle interrupt
         let regs = self.get_registers();
