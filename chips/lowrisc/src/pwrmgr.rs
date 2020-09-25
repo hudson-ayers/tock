@@ -80,6 +80,7 @@ impl PwrMgr {
         false
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs = self.registers;
 

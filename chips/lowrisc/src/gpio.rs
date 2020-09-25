@@ -110,6 +110,7 @@ impl<'a> GpioPin<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let pin = self.pin;
 

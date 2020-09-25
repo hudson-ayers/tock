@@ -158,6 +158,7 @@ impl<'a> I2c<'_> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs = self.registers;
         let irqs = regs.intr_state.extract();

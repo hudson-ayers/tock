@@ -424,6 +424,7 @@ impl<'a> Usb<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let irqs = self.registers.intr_state.extract();
 

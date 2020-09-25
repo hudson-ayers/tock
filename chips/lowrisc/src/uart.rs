@@ -205,6 +205,7 @@ impl<'a> Uart<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs = self.registers;
         let intrs = regs.intr_state.extract();

@@ -143,6 +143,7 @@ impl Hmac<'_> {
         regs.intr_enable.modify(INTR_ENABLE::FIFO_EMPTY::CLEAR);
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let regs = self.registers;
         let intrs = regs.intr_state.extract();
