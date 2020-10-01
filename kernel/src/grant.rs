@@ -1,5 +1,6 @@
 //! Data structure to store a list of userspace applications.
 
+use core::cell::Cell;
 use core::marker::PhantomData;
 use core::mem::{align_of, size_of};
 use core::ops::{Deref, DerefMut};
@@ -14,6 +15,7 @@ pub struct Grant<T: Default> {
     pub(crate) kernel: &'static Kernel,
     grant_num: usize,
     ptr: PhantomData<T>,
+    entered: Cell<usize>,
 }
 
 pub struct AppliedGrant<T> {
@@ -213,6 +215,7 @@ impl<T: Default> Grant<T> {
             kernel: kernel,
             grant_num: grant_index,
             ptr: PhantomData,
+            entered: Cell::new(0),
         }
     }
 
@@ -304,18 +307,27 @@ impl<T: Default> Grant<T> {
                         // pointer.
                         untyped_grant_ptr as *mut T
                     };
+                    let idx = appid.index().unwrap();
+                    //assert!(idx <= 31); // Max NUM_PROCS = 32, until we replace this with const generics.
+                    let entered_bit = (1 as usize) << idx;
+                    let already_entered = (self.entered.get() & entered_bit) > 0;
+                    if !already_entered {
+                        // Dereference the typed GrantPointer to make a GrantRegion
+                        // reference.
+                        let region = unsafe { &mut *typed_grant_pointer };
 
-                    // Dereference the typed GrantPointer to make a GrantRegion
-                    // reference.
-                    let region = unsafe { &mut *typed_grant_pointer };
+                        // Wrap the grant reference in something that knows
+                        // what app its a part of.
+                        let mut borrowed_region = Borrowed::new(region, appid);
 
-                    // Wrap the grant reference in something that knows
-                    // what app its a part of.
-                    let mut borrowed_region = Borrowed::new(region, appid);
-
-                    // Call the passed in closure with the borrowed grant region.
-                    let res = fun(&mut borrowed_region, &mut allocator);
-                    Ok(res)
+                        // Call the passed in closure with the borrowed grant region.
+                        self.entered.set(self.entered.get() | entered_bit);
+                        let res = fun(&mut borrowed_region, &mut allocator);
+                        self.entered.set(self.entered.get() & !entered_bit);
+                        Ok(res)
+                    } else {
+                        Err(Error::KernelError)
+                    }
                 } else {
                     Err(Error::InactiveApp)
                 }
