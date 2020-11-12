@@ -204,6 +204,9 @@ impl<T: Default> Grant<T> {
                     // GrantRegion needs to be allocated. Otherwise, we can
                     // convert the pointer to a `*mut T` because we know we
                     // previously allocated enough memory for type T.
+                    assert!(!untyped_grant_ptr.is_null()); // This WCET optimization assumes all grants are allocated at boot.
+                                                           // The optimization is not actually implemented yet, and needs to be for the
+                                                           // reported WCETs to be correct.
                     let typed_grant_pointer = if untyped_grant_ptr.is_null() {
                         unsafe {
                             // Allocate space in the process's memory for
