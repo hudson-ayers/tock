@@ -221,22 +221,22 @@ pub unsafe fn reset_handler() {
         board_kernel,
         components::gpio_component_helper!(
             nrf52840::gpio::GPIOPin,
-            0 => &base_peripherals.gpio_port[Pin::P1_01],
-            1 => &base_peripherals.gpio_port[Pin::P1_02],
-            2 => &base_peripherals.gpio_port[Pin::P1_03],
-            3 => &base_peripherals.gpio_port[Pin::P1_04],
-            4 => &base_peripherals.gpio_port[Pin::P1_05],
-            5 => &base_peripherals.gpio_port[Pin::P1_06],
-            6 => &base_peripherals.gpio_port[Pin::P1_07],
-            7 => &base_peripherals.gpio_port[Pin::P1_08],
-            8 => &base_peripherals.gpio_port[Pin::P1_10],
-            9 => &base_peripherals.gpio_port[Pin::P1_11],
-            10 => &base_peripherals.gpio_port[Pin::P1_12],
-            11 => &base_peripherals.gpio_port[Pin::P1_13],
-            12 => &base_peripherals.gpio_port[Pin::P1_14],
-            13 => &base_peripherals.gpio_port[Pin::P1_15],
-            14 => &base_peripherals.gpio_port[Pin::P0_26],
-            15 => &base_peripherals.gpio_port[Pin::P0_27]
+            0 => &nrf52840_peripherals.gpio_port[Pin::P1_01],
+            1 => &nrf52840_peripherals.gpio_port[Pin::P1_02],
+            2 => &nrf52840_peripherals.gpio_port[Pin::P1_03],
+            3 => &nrf52840_peripherals.gpio_port[Pin::P1_04],
+            4 => &nrf52840_peripherals.gpio_port[Pin::P1_05],
+            5 => &nrf52840_peripherals.gpio_port[Pin::P1_06],
+            6 => &nrf52840_peripherals.gpio_port[Pin::P1_07],
+            7 => &nrf52840_peripherals.gpio_port[Pin::P1_08],
+            8 => &nrf52840_peripherals.gpio_port[Pin::P1_10],
+            9 => &nrf52840_peripherals.gpio_port[Pin::P1_11],
+            10 => &nrf52840_peripherals.gpio_port[Pin::P1_12],
+            11 => &nrf52840_peripherals.gpio_port[Pin::P1_13],
+            12 => &nrf52840_peripherals.gpio_port[Pin::P1_14],
+            13 => &nrf52840_peripherals.gpio_port[Pin::P1_15],
+            14 => &nrf52840_peripherals.gpio_port[Pin::P0_26],
+            15 => &nrf52840_peripherals.gpio_port[Pin::P0_27]
         ),
     )
     .finalize(components::gpio_component_buf!(nrf52840::gpio::GPIOPin));
@@ -246,22 +246,22 @@ pub unsafe fn reset_handler() {
         components::button_component_helper!(
             nrf52840::gpio::GPIOPin,
             (
-                &base_peripherals.gpio_port[BUTTON1_PIN],
+                &nrf52840_peripherals.gpio_port[BUTTON1_PIN],
                 kernel::hil::gpio::ActivationMode::ActiveLow,
                 kernel::hil::gpio::FloatingState::PullUp
             ), //13
             (
-                &base_peripherals.gpio_port[BUTTON2_PIN],
+                &nrf52840_peripherals.gpio_port[BUTTON2_PIN],
                 kernel::hil::gpio::ActivationMode::ActiveLow,
                 kernel::hil::gpio::FloatingState::PullUp
             ), //14
             (
-                &base_peripherals.gpio_port[BUTTON3_PIN],
+                &nrf52840_peripherals.gpio_port[BUTTON3_PIN],
                 kernel::hil::gpio::ActivationMode::ActiveLow,
                 kernel::hil::gpio::FloatingState::PullUp
             ), //15
             (
-                &base_peripherals.gpio_port[BUTTON4_PIN],
+                &nrf52840_peripherals.gpio_port[BUTTON4_PIN],
                 kernel::hil::gpio::ActivationMode::ActiveLow,
                 kernel::hil::gpio::FloatingState::PullUp
             ) //16
@@ -270,6 +270,7 @@ pub unsafe fn reset_handler() {
     .finalize(components::button_component_buf!(nrf52840::gpio::GPIOPin));
 
     let led = components::led::LedsComponent::new(components::led_component_helper!(
+<<<<<<< HEAD
         nrf52840::gpio::GPIOPin,
         (
             &base_peripherals.gpio_port[LED1_PIN],
@@ -287,6 +288,13 @@ pub unsafe fn reset_handler() {
             &base_peripherals.gpio_port[LED4_PIN],
             kernel::hil::gpio::ActivationMode::ActiveLow
         )
+=======
+        LedLow<'static, nrf52840::gpio::GPIOPin>,
+        LedLow::new(&nrf52840_peripherals.gpio_port[LED1_PIN]),
+        LedLow::new(&nrf52840_peripherals.gpio_port[LED2_PIN]),
+        LedLow::new(&nrf52840_peripherals.gpio_port[LED3_PIN]),
+        LedLow::new(&nrf52840_peripherals.gpio_port[LED4_PIN]),
+>>>>>>> d32bd49af... port nrf52 gpio to new peripheral model using const generics
     ))
     .finalize(components::led_component_buf!(nrf52840::gpio::GPIOPin));
 
@@ -309,7 +317,7 @@ pub unsafe fn reset_handler() {
         create_capability!(capabilities::ProcessManagementCapability);
     let main_loop_capability = create_capability!(capabilities::MainLoopCapability);
     let memory_allocation_capability = create_capability!(capabilities::MemoryAllocationCapability);
-    let gpio_port = &base_peripherals.gpio_port;
+    let gpio_port = &nrf52840_peripherals.gpio_port;
     // Configure kernel debug gpios as early as possible
     kernel::debug::assign_gpios(
         Some(&gpio_port[LED1_PIN]),
