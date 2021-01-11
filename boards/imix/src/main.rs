@@ -650,3 +650,5 @@ pub unsafe fn reset_handler() {
         .finalize(components::rr_component_helper!(NUM_PROCS));
     board_kernel.kernel_loop(&imix, chip, Some(&imix.ipc), scheduler, &main_cap);
 }
+
+//bad
