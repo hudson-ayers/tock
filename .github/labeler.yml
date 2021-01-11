@@ -27,4 +27,5 @@ kernel:
 
 # add documentation label only if all changes are in doc/, or in md or txt files
 documentation:
-  - all: ['doc/*', './**/*.md', './**/*.txt']
+  - all: ['doc/*']
+  - all: ['*.md']
