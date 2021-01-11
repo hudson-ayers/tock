@@ -1,4 +1,5 @@
 //! `OptionalCell` convenience type
+//! more stuff
 
 use core::cell::Cell;
 
