@@ -361,6 +361,6 @@ impl<'a> kernel::hil::symmetric_encryption::AES128CCM<'a> for AesECB<'a> {
         _confidential: bool,
         _encrypting: bool,
     ) -> (ReturnCode, Option<&'static mut [u8]>) {
-        (ReturnCode::SUCCESS, None)
+        (ReturnCode::FAIL, None)
     }
 }

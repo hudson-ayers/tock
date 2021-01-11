@@ -333,3 +333,4 @@ pub unsafe fn reset_handler() {
     let scheduler = components::sched::priority::PriorityComponent::new(board_kernel).finalize(());
     board_kernel.kernel_loop(&earlgrey_nexysvideo, chip, None, scheduler, &main_loop_cap);
 }
+// a comment
