@@ -14,6 +14,7 @@ members = [
     "boards/hail",
     "boards/hifive1",
     "boards/imix",
+    "boards/imixmini",
     "boards/imxrt1050-evkb",
     "boards/litex/arty",
     "boards/litex/sim",
