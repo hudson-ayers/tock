@@ -294,9 +294,9 @@ pub unsafe fn reset_handler() {
         debug!("{:?}", err);
     });
 
-    let scheduler = components::sched::round_robin::RoundRobinComponent::new(&PROCESSES)
-        .finalize(components::rr_component_helper!(NUM_PROCS));
-    board_kernel.kernel_loop::<Imix, Chip, kernel::RoundRobinSched, NUM_PROCS>(
+    let scheduler = components::sched::secure_time::SecureTimeComponent::new(&PROCESSES)
+        .finalize(components::st_component_helper!(NUM_PROCS));
+    board_kernel.kernel_loop::<Imix, Chip, kernel::SecureTimeSched, NUM_PROCS>(
         &imix, chip, None, scheduler, &main_cap,
     );
 }

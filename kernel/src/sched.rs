@@ -7,6 +7,7 @@ pub(crate) mod cooperative;
 pub(crate) mod mlfq;
 pub(crate) mod priority;
 pub(crate) mod round_robin;
+pub(crate) mod secure_time;
 
 use core::cell::Cell;
 use core::ptr::NonNull;
