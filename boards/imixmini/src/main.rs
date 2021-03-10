@@ -32,6 +32,9 @@ pub mod io;
 // Helper functions for enabling/disabling power on Imix submodules
 mod power;
 
+// Helper functions for getting wcets on this board
+mod wcet;
+
 const NUM_PROCS: usize = 4;
 
 // how should the kernel respond when a process faults
@@ -294,9 +297,11 @@ pub unsafe fn reset_handler() {
         debug!("{:?}", err);
     });
 
-    let scheduler = components::sched::secure_time::SecureTimeComponent::new(&PROCESSES)
-        .finalize(components::st_component_helper!(NUM_PROCS));
-    board_kernel.kernel_loop::<Imix, Chip, kernel::SecureTimeSched, NUM_PROCS>(
-        &imix, chip, None, scheduler, &main_cap,
-    );
+    let mut scheduler =
+        components::sched::secure_time::SecureTimeComponent::new(&PROCESSES, wcet::get_task_wcet)
+            .finalize(components::st_component_helper!(
+                NUM_PROCS,
+                wcet::get_task_wcet,
+            ));
+    board_kernel.kernel_loop::<_, _, _, NUM_PROCS>(&imix, chip, None, &mut scheduler, &main_cap);
 }

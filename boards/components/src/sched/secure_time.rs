@@ -15,39 +15,56 @@
 use core::mem::MaybeUninit;
 use kernel::component::Component;
 use kernel::procs::ProcessType;
-use kernel::{static_init, static_init_half};
-use kernel::{STProcessNode, SecureTimeSched};
+use kernel::static_init_half;
+use kernel::{KernelTask, STProcessNode, SecureTimeSched};
 
+// Note: The below macro is a non-traditional use of components, as the secure time scheduler
+// is stack allocated. This is neccessary because Rust does not provide a mechanism for
+// specifying the exact type of a function item, which means that it is impossible to create
+// a global static with a function item as a generic parameter, as global statics require
+// types be declared explicitly. Tracking issue: https://github.com/rust-lang/rfcs/issues/1349
 #[macro_export]
 macro_rules! st_component_helper {
-    ($N:expr $(,)?) => {{
+    ($N:expr, $F:expr $(,)?) => {{
         use core::mem::MaybeUninit;
         use kernel::static_buf;
         use kernel::STProcessNode;
+        use kernel::SecureTimeSched;
         const UNINIT: MaybeUninit<STProcessNode<'static>> = MaybeUninit::uninit();
         static mut BUF: [MaybeUninit<STProcessNode<'static>>; $N] = [UNINIT; $N];
-        &mut BUF
+        let mut buf2 = SecureTimeSched::new($F);
+        (&mut BUF, buf2)
     };};
 }
 
-pub struct SecureTimeComponent {
+pub struct SecureTimeComponent<F>
+where
+    F: 'static + FnOnce(KernelTask) -> u32,
+{
     processes: &'static [Option<&'static dyn ProcessType>],
+    _wcet_func: F,
 }
 
-impl SecureTimeComponent {
-    pub fn new(processes: &'static [Option<&'static dyn ProcessType>]) -> SecureTimeComponent {
-        SecureTimeComponent { processes }
+impl<F: 'static + FnOnce(KernelTask) -> u32> SecureTimeComponent<F> {
+    pub fn new(processes: &'static [Option<&'static dyn ProcessType>], wcet_func: F) -> Self {
+        Self {
+            processes,
+            _wcet_func: wcet_func,
+        }
     }
 }
 
-impl Component for SecureTimeComponent {
-    type StaticInput = &'static mut [MaybeUninit<STProcessNode<'static>>];
-    type Output = &'static mut SecureTimeSched<'static>;
+impl<F: 'static + FnOnce(KernelTask) -> u32> Component for SecureTimeComponent<F> {
+    type StaticInput = (
+        &'static mut [MaybeUninit<STProcessNode<'static>>],
+        SecureTimeSched<'static, F>,
+    );
+    type Output = SecureTimeSched<'static, F>;
 
     unsafe fn finalize(self, buf: Self::StaticInput) -> Self::Output {
-        let scheduler = static_init!(SecureTimeSched<'static>, SecureTimeSched::new());
+        let scheduler = buf.1;
 
-        for (i, node) in buf.iter_mut().enumerate() {
+        for (i, node) in buf.0.iter_mut().enumerate() {
             let init_node = static_init_half!(
                 node,
                 STProcessNode<'static>,

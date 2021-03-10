@@ -4,7 +4,15 @@ use crate::common::list::{List, ListLink, ListNode};
 use crate::platform::Chip;
 use crate::procs::ProcessType;
 use crate::sched::{Kernel, Scheduler, SchedulingDecision, StoppedExecutingReason};
+use crate::syscall::Syscall;
 use core::cell::Cell;
+
+/// Types of kernel tasks for which WCET requests can be issued.
+pub enum KernelTask {
+    BottomHalfInterrupt { interrupt: u8 },
+    TopHalfInterrupt { interrupt: u8 },
+    SystemCall(Syscall),
+}
 
 /// A node in the linked list the scheduler uses to track processes
 /// Each node holds a pointer to a slot in the processes array
@@ -29,25 +37,30 @@ impl<'a> ListNode<'a, STProcessNode<'a>> for STProcessNode<'a> {
 }
 
 /// Secure Time Scheduler
-pub struct SecureTimeSched<'a> {
+pub struct SecureTimeSched<'a, F>
+where
+    F: FnOnce(KernelTask) -> u32,
+{
     time_remaining: Cell<u32>,
     pub processes: List<'a, STProcessNode<'a>>,
     last_rescheduled: Cell<bool>,
+    wcet_lookup_func: F,
 }
 
-impl<'a> SecureTimeSched<'a> {
+impl<'a, F: FnOnce(KernelTask) -> u32> SecureTimeSched<'a, F> {
     /// How long a process can run before being pre-empted
     const DEFAULT_TIMESLICE_US: u32 = 10000;
-    pub const fn new() -> SecureTimeSched<'a> {
-        SecureTimeSched {
+    pub const fn new(wcet_lookup_func: F) -> Self {
+        Self {
             time_remaining: Cell::new(Self::DEFAULT_TIMESLICE_US),
             processes: List::new(),
             last_rescheduled: Cell::new(false),
+            wcet_lookup_func,
         }
     }
 }
 
-impl<'a, C: Chip> Scheduler<C> for SecureTimeSched<'a> {
+impl<'a, C: Chip, F: FnOnce(KernelTask) -> u32> Scheduler<C> for SecureTimeSched<'a, F> {
     fn next(&self, kernel: &Kernel) -> SchedulingDecision {
         if kernel.processes_blocked() {
             // No processes ready
