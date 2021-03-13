@@ -264,8 +264,24 @@ impl<I: InterruptService<Task> + 'static> Chip for Sam4l<I> {
         }
     }
 
+    fn service_specific_interrupt(&self, interrupt: u32) {
+        unsafe {
+            match self.interrupt_service.service_interrupt(interrupt) {
+                true => {}
+                false => panic!("unhandled interrupt"),
+            }
+            let n = cortexm4::nvic::Nvic::new(interrupt);
+            n.clear_pending();
+            n.enable();
+        }
+    }
+
     fn has_pending_interrupts(&self) -> bool {
         unsafe { cortexm4::nvic::has_pending() || deferred_call::has_tasks() }
+    }
+
+    fn highest_priority_interrupt(&self) -> Option<u32> {
+        unsafe { cortexm4::nvic::next_pending() }
     }
 
     fn mpu(&self) -> &cortexm4::mpu::MPU {

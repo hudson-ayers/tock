@@ -297,11 +297,15 @@ pub unsafe fn reset_handler() {
         debug!("{:?}", err);
     });
 
-    let mut scheduler =
-        components::sched::secure_time::SecureTimeComponent::new(&PROCESSES, wcet::get_task_wcet)
-            .finalize(components::st_component_helper!(
-                NUM_PROCS,
-                wcet::get_task_wcet,
-            ));
+    let mut scheduler = components::sched::secure_time::SecureTimeComponent::new(
+        mux_alarm,
+        &PROCESSES,
+        wcet::get_task_wcet,
+    )
+    .finalize(components::st_component_helper!(
+        wcet::get_task_wcet,
+        sam4l::ast::Ast,
+        mux_alarm,
+    ));
     board_kernel.kernel_loop::<_, _, _, NUM_PROCS>(&imix, chip, None, &mut scheduler, &main_cap);
 }

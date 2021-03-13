@@ -98,6 +98,19 @@ pub trait Chip {
     /// but before this function returns. The kernel will handle this edge case.
     fn service_pending_interrupts(&self);
 
+    /// The kernel calls this function to tell the chip to handle the bottom half
+    /// of a specific interrupt.
+    #[allow(unused)]
+    fn service_specific_interrupt(&self, interrupt: u32) {
+        unimplemented!();
+    }
+
+    /// The kernel can call this function to learn the highest priority interrupt
+    /// which is pending.
+    fn highest_priority_interrupt(&self) -> Option<u32> {
+        unimplemented!();
+    }
+
     /// Ask the chip to check if there are any pending interrupts.
     fn has_pending_interrupts(&self) -> bool;
 
