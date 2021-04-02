@@ -94,7 +94,7 @@ impl<'a> TextScreen<'a> {
     ) -> CommandReturn {
         let res = self
             .apps
-            .enter(appid, |app, _| {
+            .enter(appid, |app| {
                 if self.current_app.is_none() {
                     self.current_app.set(appid);
                     app.command = command;
@@ -146,7 +146,7 @@ impl<'a> TextScreen<'a> {
             TextScreenCommand::NoCursor => self.text_screen.hide_cursor(),
             TextScreenCommand::Write => self
                 .apps
-                .enter(appid, |app, _| {
+                .enter(appid, |app| {
                     if data1 > 0 {
                         app.write_position = 0;
                         app.write_len = data1;
@@ -181,7 +181,7 @@ impl<'a> TextScreen<'a> {
         // Check for pending events.
         for app in self.apps.iter() {
             let appid = app.appid();
-            let current_command = app.enter(|app, _| {
+            let current_command = app.enter(|app| {
                 if app.pending_command {
                     app.pending_command = false;
                     self.current_app.set(appid);
@@ -202,7 +202,7 @@ impl<'a> TextScreen<'a> {
 
     fn schedule_callback(&self, data1: usize, data2: usize, data3: usize) {
         self.current_app.take().map(|appid| {
-            let _ = self.apps.enter(appid, |app, _| {
+            let _ = self.apps.enter(appid, |app| {
                 app.pending_command = false;
                 app.callback.schedule(data1, data2, data3);
             });
@@ -221,7 +221,7 @@ impl<'a> Driver for TextScreen<'a> {
             0 => {
                 let res = self
                     .apps
-                    .enter(app_id, |app, _| {
+                    .enter(app_id, |app| {
                         mem::swap(&mut app.callback, &mut callback);
                     })
                     .map_err(ErrorCode::from);
@@ -282,7 +282,7 @@ impl<'a> Driver for TextScreen<'a> {
             0 => {
                 let res = self
                     .apps
-                    .enter(appid, |app, _| {
+                    .enter(appid, |app| {
                         mem::swap(&mut app.shared, &mut slice);
                         app.write_position = 0;
                     })

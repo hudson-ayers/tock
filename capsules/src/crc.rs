@@ -129,7 +129,7 @@ impl<'a, C: hil::crc::CRC<'a>> Crc<'a, C> {
         let mut found = false;
         for app in self.apps.iter() {
             let appid = app.appid();
-            app.enter(|app, _| {
+            app.enter(|app| {
                 if let Some(alg) = app.waiting {
                     let rcode = app
                         .buffer
@@ -180,7 +180,7 @@ impl<'a, C: hil::crc::CRC<'a>> Driver for Crc<'a, C> {
             // Provide user buffer to compute CRC over
             0 => self
                 .apps
-                .enter(appid, |app, _| {
+                .enter(appid, |app| {
                     mem::swap(&mut app.buffer, &mut slice);
                 })
                 .map_err(ErrorCode::from),
@@ -222,7 +222,7 @@ impl<'a, C: hil::crc::CRC<'a>> Driver for Crc<'a, C> {
             // Set callback for CRC result
             0 => self
                 .apps
-                .enter(app_id, |app, _| {
+                .enter(app_id, |app| {
                     mem::swap(&mut app.callback, &mut callback);
                 })
                 .map_err(ErrorCode::from),
@@ -310,7 +310,7 @@ impl<'a, C: hil::crc::CRC<'a>> Driver for Crc<'a, C> {
             2 => {
                 let result = if let Some(alg) = alg_from_user_int(algorithm) {
                     self.apps
-                        .enter(appid, |app, _| {
+                        .enter(appid, |app| {
                             if app.waiting.is_some() {
                                 // Each app may make only one request at a time
                                 Err(ErrorCode::BUSY)
@@ -341,7 +341,7 @@ impl<'a, C: hil::crc::CRC<'a>> hil::crc::Client for Crc<'a, C> {
     fn receive_result(&self, result: u32) {
         self.serving_app.take().map(|appid| {
             self.apps
-                .enter(appid, |app, _| {
+                .enter(appid, |app| {
                     app.callback
                         .schedule(From::from(ReturnCode::SUCCESS), result as usize, 0);
                     app.waiting = None;
