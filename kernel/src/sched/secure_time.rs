@@ -18,29 +18,29 @@ pub enum KernelTask {
     SystemCall(Syscall),
 }
 
-pub struct KernelWork {
+pub struct KernelWork<A: time::Alarm<'static>> {
     work_type: KernelTask,
-    duration: u32,
-    deadline: u32,
+    duration_us: u32,
+    deadline: A::Ticks,
 }
 
-pub struct UserspaceResult {
+pub struct UserspaceResult<A: time::Alarm<'static>> {
     appid: crate::AppId,
     result: crate::syscall::GenericSyscallReturnValue, // TODO: Should this be set earlier
-    deadline: u32,
+    deadline: A::Ticks,
 }
 
 /// Types of work this scheduler might want to schedule
-pub enum Task {
+pub enum Task<A: time::Alarm<'static>> {
     /// Non-preemptible, in-kernel work. This includes system calls and bottom-half
     /// interrupt handlers that have not yet run.
-    Kernel(KernelWork),
+    Kernel(KernelWork<A>),
 
     /// After a system call or bottom half interrupt runs, there may be results
     /// that need to be delivered to a process *at* a given deadline. Delivery of
     /// results is separate from performing the work that generates the results,
     /// and must be scheduled separately.
-    UserspaceResultDelivery(UserspaceResult),
+    UserspaceResultDelivery(UserspaceResult<A>),
 
     /// A userspace process that is ready to execute, but has no deadline.
     /// This could be a process that has never started, or a process that was
@@ -50,13 +50,13 @@ pub enum Task {
 
 /// A node in the linked list the scheduler uses to track processes
 /// Each node holds a pointer to a slot in the processes array
-pub struct STTaskNode<'a> {
-    task: Option<Task>,
-    next: ListLink<'a, STTaskNode<'a>>,
+pub struct STTaskNode<'a, A: time::Alarm<'static>> {
+    task: Option<Task<A>>,
+    next: ListLink<'a, STTaskNode<'a, A>>,
 }
 
-impl<'a> STTaskNode<'a> {
-    pub fn new(task: Option<Task>) -> Self {
+impl<'a, A: time::Alarm<'static>> STTaskNode<'a, A> {
+    pub fn new(task: Option<Task<A>>) -> Self {
         Self {
             task,
             next: ListLink::empty(),
@@ -64,8 +64,8 @@ impl<'a> STTaskNode<'a> {
     }
 }
 
-impl<'a> ListNode<'a, STTaskNode<'a>> for STTaskNode<'a> {
-    fn next(&'a self) -> &'a ListLink<'a, STTaskNode> {
+impl<'a, A: time::Alarm<'static>> ListNode<'a, STTaskNode<'a, A>> for STTaskNode<'a, A> {
+    fn next(&'a self) -> &'a ListLink<'a, STTaskNode<A>> {
         &self.next
     }
 }
@@ -77,15 +77,12 @@ where
     A: 'static + time::Alarm<'static>,
 {
     alarm: &'static A,
-    time_remaining: Cell<u32>,
-
     /// Ordered list of tasks that are ready to execute
-    pub ready_tasks: List<'a, STTaskNode<'a>>,
+    pub ready_tasks: List<'a, STTaskNode<'a, A>>,
 
     /// Ordered list of tasks which could become ready to execute at
     /// any time in response to an interrupt
-    pub potential_tasks: List<'a, STTaskNode<'a>>,
-    last_rescheduled: Cell<bool>,
+    pub potential_tasks: List<'a, STTaskNode<'a, A>>,
     wcet_lookup_func: F,
 }
 
@@ -97,10 +94,8 @@ impl<'a, F: FnOnce(KernelTask) -> u32, A: 'static + time::Alarm<'static>>
     pub const fn new(alarm: &'static A, wcet_lookup_func: F) -> Self {
         Self {
             alarm,
-            time_remaining: Cell::new(Self::DEFAULT_TIMESLICE_US),
             ready_tasks: List::new(),
             potential_tasks: List::new(),
-            last_rescheduled: Cell::new(false),
             wcet_lookup_func,
         }
     }
@@ -115,15 +110,15 @@ impl<'a, F: FnOnce(KernelTask) -> u32, A: 'static + time::Alarm<'static>>
     /// Helper function that returns the most urgent outstanding task.
     /// This is the task that should be serviced next to avoid any
     /// tasks missing their deadlines.
-    fn get_most_urgent_task(&self) -> Option<Task> {
-        unimplemented!();
+    fn get_most_urgent_task(&self) -> Option<Task<A>> {
+        self.ready_tasks.head().map(|node| node.task.unwrap())
     }
 
     /// Helper function that returns a userspace process which is
     /// ready to execute and has no deadline at which it should be
     /// scheduled. If multiple userspace processes fall in this
     /// category, they should be selected in a round-robin order.
-    fn get_next_ready_process(&self) -> Option<Task> {
+    fn get_next_ready_process(&self) -> Option<Task<A>> {
         unimplemented!();
     }
 
@@ -135,7 +130,7 @@ impl<'a, F: FnOnce(KernelTask) -> u32, A: 'static + time::Alarm<'static>>
     }
 
     /// Function that returns the next `Task` which should be run.
-    fn schedule_next(&self) -> Option<Task> {
+    fn schedule_next(&self) -> Option<Task<A>> {
         if self.no_deadlines_processes_waiting()
             && self.can_afford_slack(Self::DEFAULT_TIMESLICE_US)
         {
@@ -152,8 +147,9 @@ impl<'a, C: Chip, F: FnOnce(KernelTask) -> u32, A: 'static + time::Alarm<'static
     fn next(&self, _kernel: &Kernel) -> SchedulingDecision {
         match self.schedule_next() {
             Some(Task::UserspaceResultDelivery(proc)) => {
-                // TODO: Handle wraparound, deadline types/units.
-                while self.alarm.now().into_u32() < proc.deadline {} //spin!
+                // TODO: Handle wraparound? For now, just never set deadlines far enough in future this
+                // can be an issue.
+                while self.alarm.now() < proc.deadline {} //spin! could be made more efficient
                 SchedulingDecision::RunProcess((proc.appid, Some(Self::DEFAULT_TIMESLICE_US)))
             }
             Some(Task::ReadyProcess(proc)) => {
@@ -171,6 +167,7 @@ impl<'a, C: Chip, F: FnOnce(KernelTask) -> u32, A: 'static + time::Alarm<'static
     }
 
     fn result(&self, result: StoppedExecutingReason, execution_time_us: Option<u32>) {
+        // update queues to reflect remaining workload
         unimplemented!();
     }
 
