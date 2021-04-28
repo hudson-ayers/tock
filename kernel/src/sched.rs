@@ -917,7 +917,9 @@ impl Kernel {
                 subdriver_number,
                 arg0,
                 arg1,
+                deadline,
             } => {
+                debug!("DEADLINE: {}", deadline);
                 let cres = platform.with_driver(driver_number, |driver| match driver {
                     Some(d) => d.command(subdriver_number, arg0, arg1, process.processid()),
                     None => CommandReturn::failure(ErrorCode::NODEVICE),
