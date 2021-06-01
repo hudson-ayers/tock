@@ -47,12 +47,13 @@ pub unsafe extern "C" fn panic_fmt(pi: &PanicInfo) -> ! {
 
     let writer = &mut WRITER;
 
-    debug::panic(
+    loop {}
+    /*debug::panic(
         &mut [first_led],
         writer,
         pi,
         &rv32i::support::nop,
         &PROCESSES,
         &CHIP,
-    )
+    )*/
 }

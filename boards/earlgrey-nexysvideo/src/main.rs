@@ -9,7 +9,7 @@
 
 use capsules::virtual_alarm::{MuxAlarm, VirtualMuxAlarm};
 use capsules::virtual_hmac::VirtualMuxHmac;
-use earlgrey::chip::EarlGreyDefaultPeripherals;
+//use earlgrey::chip::EarlGreyDefaultPeripherals;
 use kernel::capabilities;
 use kernel::common::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferredCallClientState};
 use kernel::common::registers::interfaces::ReadWriteable;
@@ -44,7 +44,7 @@ static mut PROCESSES: [Option<&'static dyn kernel::procs::Process>; 4] = [None; 
 static mut CHIP: Option<
     &'static earlgrey::chip::EarlGrey<
         VirtualMuxAlarm<'static, earlgrey::timer::RvTimer>,
-        EarlGreyDefaultPeripherals,
+        MiniPeripherals,
     >,
 > = None;
 
@@ -59,16 +59,17 @@ pub static mut STACK_MEMORY: [u8; 0x1000] = [0; 0x1000];
 /// A structure representing this platform that holds references to all
 /// capsules for this platform. We've included an alarm and console.
 struct EarlGreyNexysVideo {
-    led: &'static capsules::led::LedDriver<
+    /*led: &'static capsules::led::LedDriver<
         'static,
         LedHigh<'static, earlgrey::gpio::GpioPin<'static>>,
-    >,
-    gpio: &'static capsules::gpio::GPIO<'static, earlgrey::gpio::GpioPin<'static>>,
-    console: &'static capsules::console::Console<'static>,
+    >,*/
+    //gpio: &'static capsules::gpio::GPIO<'static, earlgrey::gpio::GpioPin<'static>>,
+    //console: &'static capsules::console::Console<'static>,
     alarm: &'static capsules::alarm::AlarmDriver<
         'static,
         VirtualMuxAlarm<'static, earlgrey::timer::RvTimer<'static>>,
     >,
+    /*
     hmac: &'static capsules::hmac::HmacDriver<
         'static,
         VirtualMuxHmac<'static, lowrisc::hmac::Hmac<'static>, [u8; 32]>,
@@ -79,6 +80,7 @@ struct EarlGreyNexysVideo {
         capsules::virtual_uart::UartDevice<'static>,
     >,
     i2c_master: &'static capsules::i2c_master::I2CMasterDriver<'static, lowrisc::i2c::I2c<'static>>,
+    */
 }
 
 /// Mapping of integer syscalls to objects that implement syscalls.
@@ -88,15 +90,36 @@ impl Platform for EarlGreyNexysVideo {
         F: FnOnce(Option<&dyn kernel::Driver>) -> R,
     {
         match driver_num {
-            capsules::led::DRIVER_NUM => f(Some(self.led)),
-            capsules::hmac::DRIVER_NUM => f(Some(self.hmac)),
-            capsules::gpio::DRIVER_NUM => f(Some(self.gpio)),
-            capsules::console::DRIVER_NUM => f(Some(self.console)),
+            //capsules::led::DRIVER_NUM => f(Some(self.led)),
+            //capsules::hmac::DRIVER_NUM => f(Some(self.hmac)),
+            //capsules::gpio::DRIVER_NUM => f(Some(self.gpio)),
+            //capsules::console::DRIVER_NUM => f(Some(self.console)),
             capsules::alarm::DRIVER_NUM => f(Some(self.alarm)),
-            capsules::low_level_debug::DRIVER_NUM => f(Some(self.lldb)),
-            capsules::i2c_master::DRIVER_NUM => f(Some(self.i2c_master)),
+            //capsules::low_level_debug::DRIVER_NUM => f(Some(self.lldb)),
+            //capsules::i2c_master::DRIVER_NUM => f(Some(self.i2c_master)),
             _ => f(None),
         }
+    }
+}
+
+pub struct MiniPeripherals {}
+
+impl MiniPeripherals {
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+use earlgrey::chip_config::CONFIG;
+use earlgrey::interrupts;
+use kernel::InterruptService;
+impl InterruptService<()> for MiniPeripherals {
+    unsafe fn service_interrupt(&self, interrupt: u32) -> bool {
+        false
+    }
+
+    unsafe fn service_deferred_call(&self, _: ()) -> bool {
+        false
     }
 }
 
@@ -109,10 +132,12 @@ pub unsafe fn main() {
     // Ibex-specific handler
     earlgrey::chip::configure_trap_handler();
 
+    /*
     let peripherals = static_init!(
         EarlGreyDefaultPeripherals,
         EarlGreyDefaultPeripherals::new()
-    );
+    );*/
+    let peripherals = static_init!(MiniPeripherals, MiniPeripherals::new());
 
     // initialize capabilities
     let process_mgmt_cap = create_capability!(capabilities::ProcessManagementCapability);
@@ -131,23 +156,27 @@ pub unsafe fn main() {
     DynamicDeferredCall::set_global_instance(dynamic_deferred_caller);
 
     // Configure kernel debug gpios as early as possible
+    /*
     kernel::debug::assign_gpios(
         Some(&peripherals.gpio_port[7]), // First LED
         None,
         None,
     );
+    */
 
     // Create a shared UART channel for the console and for kernel debug.
+    /*
     let uart_mux = components::console::UartMuxComponent::new(
         &peripherals.uart0,
         earlgrey::uart::UART0_BAUDRATE,
         dynamic_deferred_caller,
     )
     .finalize(());
+    */
 
     // LEDs
     // Start with half on and half off
-    let led = components::led::LedsComponent::new(components::led_component_helper!(
+    /*let led = components::led::LedsComponent::new(components::led_component_helper!(
         LedHigh<'static, earlgrey::gpio::GpioPin>,
         LedHigh::new(&peripherals.gpio_port[8]),
         LedHigh::new(&peripherals.gpio_port[9]),
@@ -160,8 +189,9 @@ pub unsafe fn main() {
     ))
     .finalize(components::led_component_buf!(
         LedHigh<'static, earlgrey::gpio::GpioPin>
-    ));
+    ));*/
 
+    /*
     let gpio = components::gpio::GpioComponent::new(
         board_kernel,
         components::gpio_component_helper!(
@@ -177,6 +207,7 @@ pub unsafe fn main() {
         ),
     )
     .finalize(components::gpio_component_buf!(earlgrey::gpio::GpioPin));
+    */
 
     let hardware_alarm = static_init!(earlgrey::timer::RvTimer, earlgrey::timer::RvTimer::new());
     hardware_alarm.setup();
@@ -210,7 +241,7 @@ pub unsafe fn main() {
     let chip = static_init!(
         earlgrey::chip::EarlGrey<
             VirtualMuxAlarm<'static, earlgrey::timer::RvTimer>,
-            EarlGreyDefaultPeripherals,
+            MiniPeripherals,
         >,
         earlgrey::chip::EarlGrey::new(scheduler_timer_virtual_alarm, peripherals, hardware_alarm)
     );
@@ -226,10 +257,11 @@ pub unsafe fn main() {
     csr::CSR.mstatus.modify(csr::mstatus::mstatus::mie::SET);
 
     // Setup the console.
-    let console = components::console::ConsoleComponent::new(board_kernel, uart_mux).finalize(());
+    //let console = components::console::ConsoleComponent::new(board_kernel, uart_mux).finalize(());
     // Create the debugger object that handles calls to `debug!()`.
-    components::debug_writer::DebugWriterComponent::new(uart_mux).finalize(());
+    //components::debug_writer::DebugWriterComponent::new(uart_mux).finalize(());
 
+    /*
     let lldb = components::lldb::LowLevelDebugComponent::new(board_kernel, uart_mux).finalize(());
 
     let hmac_data_buffer = static_init!([u8; 64], [0; 64]);
@@ -260,6 +292,7 @@ pub unsafe fn main() {
     );
 
     peripherals.i2c0.set_master_client(i2c_master);
+    */
 
     // USB support is currently broken in the OpenTitan hardware
     // See https://github.com/lowRISC/opentitan/issues/2598 for more details
@@ -273,6 +306,7 @@ pub unsafe fn main() {
         static _estorage: u8;
     }
 
+    /*
     // Flash
     let flash_ctrl_read_buf = static_init!(
         [u8; lowrisc::flash_ctrl::PAGE_SIZE],
@@ -299,6 +333,7 @@ pub unsafe fn main() {
         lowrisc::flash_ctrl::FlashCtrl
     ));
     hil::flash::HasClient::set_client(&peripherals.flash_ctrl, mux_flash);
+    */
 
     /// These symbols are defined in the linker script.
     extern "C" {
@@ -331,13 +366,13 @@ pub unsafe fn main() {
     }
 
     let earlgrey_nexysvideo = EarlGreyNexysVideo {
-        gpio: gpio,
-        led: led,
-        console: console,
+        //gpio: gpio,
+        //led: led,
+        //console: console,
         alarm: alarm,
-        hmac,
-        lldb: lldb,
-        i2c_master,
+        //hmac,
+        //lldb: lldb,
+        //i2c_master,
     };
 
     let mut mpu_config = rv32i::epmp::PMPConfig::default();
