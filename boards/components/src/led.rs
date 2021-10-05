@@ -49,19 +49,19 @@ macro_rules! led_component_buf {
     };};
 }
 
-pub struct LedsComponent<L: 'static + Led> {
-    leds: &'static mut [&'static L],
+pub struct LedsComponent<L: 'static + Led, const NUM_LEDS: usize> {
+    leds: &'static mut [&'static L; NUM_LEDS],
 }
 
-impl<L: 'static + Led> LedsComponent<L> {
+impl<L: 'static + Led, const NUM_LEDS: usize> LedsComponent<L> {
     pub fn new(leds: &'static mut [&'static L]) -> Self {
         Self { leds }
     }
 }
 
-impl<L: 'static + Led> Component for LedsComponent<L> {
-    type StaticInput = &'static mut MaybeUninit<LedDriver<'static, L>>;
-    type Output = &'static LedDriver<'static, L>;
+impl<L: 'static + Led, const NUM_LEDS: usize> Component for LedsComponent<L, NUM_LEDS> {
+    type StaticInput = &'static mut MaybeUninit<LedDriver<'static, L, NUM_LEDS>>;
+    type Output = &'static LedDriver<'static, L, NUM_LEDS>;
 
     unsafe fn finalize(self, static_buffer: Self::StaticInput) -> Self::Output {
         static_init_half!(
