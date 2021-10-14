@@ -53,6 +53,7 @@ struct RedboardArtemisNano {
     led: &'static capsules::led::LedDriver<
         'static,
         LedHigh<'static, apollo3::gpio::GpioPin<'static>>,
+        1,
     >,
     gpio: &'static capsules::gpio::GPIO<'static, apollo3::gpio::GpioPin<'static>>,
     console: &'static capsules::console::Console<'static>,
@@ -191,7 +192,8 @@ pub unsafe fn main() {
         LedHigh::new(&peripherals.gpio_port[19]),
     ))
     .finalize(components::led_component_buf!(
-        LedHigh<'static, apollo3::gpio::GpioPin>
+        LedHigh<'static, apollo3::gpio::GpioPin>,
+        1
     ));
 
     // GPIOs

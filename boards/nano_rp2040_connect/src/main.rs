@@ -71,7 +71,7 @@ pub struct NanoRP2040Connect {
         VirtualMuxAlarm<'static, rp2040::timer::RPTimer<'static>>,
     >,
     gpio: &'static capsules::gpio::GPIO<'static, RPGpioPin<'static>>,
-    led: &'static capsules::led::LedDriver<'static, LedHigh<'static, RPGpioPin<'static>>>,
+    led: &'static capsules::led::LedDriver<'static, LedHigh<'static, RPGpioPin<'static>>, 1>,
     adc: &'static capsules::adc::AdcVirtualized<'static>,
     temperature: &'static capsules::temperature::TemperatureSensor<'static>,
 
@@ -375,7 +375,8 @@ pub unsafe fn main() {
         LedHigh::new(&peripherals.pins.get_pin(RPGpio::GPIO6))
     ))
     .finalize(components::led_component_buf!(
-        LedHigh<'static, RPGpioPin<'static>>
+        LedHigh<'static, RPGpioPin<'static>>,
+        1
     ));
 
     peripherals.adc.init();

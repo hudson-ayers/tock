@@ -54,6 +54,7 @@ struct ArtyE21 {
     led: &'static capsules::led::LedDriver<
         'static,
         hil::led::LedHigh<'static, arty_e21_chip::gpio::GpioPin<'static>>,
+        3,
     >,
     button: &'static capsules::button::Button<'static, arty_e21_chip::gpio::GpioPin<'static>>,
     // ipc: kernel::ipc::IPC<NUM_PROCS>,
@@ -200,7 +201,8 @@ pub unsafe fn main() {
         hil::led::LedHigh::new(&peripherals.gpio_port[0]), // Blue
     ))
     .finalize(components::led_component_buf!(
-        hil::led::LedHigh<'static, arty_e21_chip::gpio::GpioPin>
+        hil::led::LedHigh<'static, arty_e21_chip::gpio::GpioPin>,
+        3
     ));
 
     // BUTTONs

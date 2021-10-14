@@ -120,6 +120,7 @@ struct LiteXSim {
             'static,
             litex_vexriscv::gpio::LiteXGPIOPin<'static, 'static, socc::SoCRegisterFmt>,
         >,
+        8,
     >,
     console: &'static capsules::console::Console<'static>,
     lldb: &'static capsules::low_level_debug::LowLevelDebug<
@@ -478,6 +479,7 @@ pub unsafe fn main() {
     ))
     .finalize(components::led_component_buf!(
         kernel::hil::led::LedHigh<GPIOPin>,
+        8
     ));
 
     // ---------- BUTTON ----------

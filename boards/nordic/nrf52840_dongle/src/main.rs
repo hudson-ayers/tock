@@ -89,6 +89,7 @@ pub struct Platform {
     led: &'static capsules::led::LedDriver<
         'static,
         LedLow<'static, nrf52840::gpio::GPIOPin<'static>>,
+        4,
     >,
     rng: &'static capsules::rng::RngDriver<'static>,
     temp: &'static capsules::temperature::TemperatureSensor<'static>,
@@ -247,7 +248,8 @@ pub unsafe fn main() {
         LedLow::new(&nrf52840_peripherals.gpio_port[LED2_B_PIN]),
     ))
     .finalize(components::led_component_buf!(
-        LedLow<'static, nrf52840::gpio::GPIOPin>
+        LedLow<'static, nrf52840::gpio::GPIOPin>,
+        4
     ));
 
     let chip = static_init!(

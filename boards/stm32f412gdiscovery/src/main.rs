@@ -47,8 +47,11 @@ pub static mut STACK_MEMORY: [u8; 0x2000] = [0; 0x2000];
 struct STM32F412GDiscovery {
     console: &'static capsules::console::Console<'static>,
     ipc: kernel::ipc::IPC<NUM_PROCS, NUM_UPCALLS_IPC>,
-    led:
-        &'static capsules::led::LedDriver<'static, LedLow<'static, stm32f412g::gpio::Pin<'static>>>,
+    led: &'static capsules::led::LedDriver<
+        'static,
+        LedLow<'static, stm32f412g::gpio::Pin<'static>>,
+        4,
+    >,
     button: &'static capsules::button::Button<'static, stm32f412g::gpio::Pin<'static>>,
     alarm: &'static capsules::alarm::AlarmDriver<
         'static,
@@ -490,7 +493,8 @@ pub unsafe fn main() {
         ),
     ))
     .finalize(components::led_component_buf!(
-        LedLow<'static, stm32f412g::gpio::Pin>
+        LedLow<'static, stm32f412g::gpio::Pin>,
+        4
     ));
 
     // BUTTONs

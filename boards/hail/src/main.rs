@@ -69,7 +69,11 @@ struct Hail {
     >,
     nrf51822: &'static capsules::nrf51822_serialization::Nrf51822Serialization<'static>,
     adc: &'static capsules::adc::AdcDedicated<'static, sam4l::adc::Adc>,
-    led: &'static capsules::led::LedDriver<'static, LedLow<'static, sam4l::gpio::GPIOPin<'static>>>,
+    led: &'static capsules::led::LedDriver<
+        'static,
+        LedLow<'static, sam4l::gpio::GPIOPin<'static>>,
+        3,
+    >,
     button: &'static capsules::button::Button<'static, sam4l::gpio::GPIOPin<'static>>,
     rng: &'static capsules::rng::RngDriver<'static>,
     ipc: kernel::ipc::IPC<NUM_PROCS, NUM_UPCALLS_IPC>,
@@ -394,7 +398,8 @@ pub unsafe fn main() {
         LedLow::new(&peripherals.pa[14]), // Blue
     ))
     .finalize(components::led_component_buf!(
-        LedLow<'static, sam4l::gpio::GPIOPin>
+        LedLow<'static, sam4l::gpio::GPIOPin>,
+        3
     ));
 
     // BUTTONs

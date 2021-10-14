@@ -50,6 +50,7 @@ struct WeactF401CC {
     led: &'static capsules::led::LedDriver<
         'static,
         LedLow<'static, stm32f401cc::gpio::Pin<'static>>,
+        1,
     >,
     button: &'static capsules::button::Button<'static, stm32f401cc::gpio::Pin<'static>>,
     adc: &'static capsules::adc::AdcVirtualized<'static>,
@@ -308,7 +309,8 @@ pub unsafe fn main() {
         LedLow::new(gpio_ports.get_pin(stm32f401cc::gpio::PinId::PC13).unwrap()),
     ))
     .finalize(components::led_component_buf!(
-        LedLow<'static, stm32f401cc::gpio::Pin>
+        LedLow<'static, stm32f401cc::gpio::Pin>,
+        1
     ));
 
     // BUTTONs

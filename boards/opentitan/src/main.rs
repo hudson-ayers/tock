@@ -89,6 +89,7 @@ struct EarlGreyNexysVideo {
     led: &'static capsules::led::LedDriver<
         'static,
         LedHigh<'static, earlgrey::gpio::GpioPin<'static>>,
+        8,
     >,
     gpio: &'static capsules::gpio::GPIO<'static, earlgrey::gpio::GpioPin<'static>>,
     console: &'static capsules::console::Console<'static>,
@@ -243,7 +244,8 @@ unsafe fn setup() -> (
         LedHigh::new(&peripherals.gpio_port[15]),
     ))
     .finalize(components::led_component_buf!(
-        LedHigh<'static, earlgrey::gpio::GpioPin>
+        LedHigh<'static, earlgrey::gpio::GpioPin>,
+        8
     ));
 
     let gpio = components::gpio::GpioComponent::new(

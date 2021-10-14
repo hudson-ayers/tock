@@ -35,8 +35,11 @@ const FAULT_RESPONSE: kernel::process::PanicFaultPolicy = kernel::process::Panic
 
 /// Teensy 4 platform
 struct Teensy40 {
-    led:
-        &'static capsules::led::LedDriver<'static, LedHigh<'static, imxrt1060::gpio::Pin<'static>>>,
+    led: &'static capsules::led::LedDriver<
+        'static,
+        LedHigh<'static, imxrt1060::gpio::Pin<'static>>,
+        1,
+    >,
     console: &'static capsules::console::Console<'static>,
     ipc: kernel::ipc::IPC<NUM_PROCS, NUM_UPCALLS_IPC>,
     alarm: &'static capsules::alarm::AlarmDriver<
@@ -278,7 +281,8 @@ pub unsafe fn main() {
         LedHigh::new(peripherals.ports.pin(PinId::B0_03))
     ))
     .finalize(components::led_component_buf!(
-        LedHigh<'static, imxrt1060::gpio::Pin>
+        LedHigh<'static, imxrt1060::gpio::Pin>,
+        1
     ));
 
     // Alarm

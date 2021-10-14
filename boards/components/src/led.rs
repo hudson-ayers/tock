@@ -41,10 +41,10 @@ macro_rules! led_component_helper {
 
 #[macro_export]
 macro_rules! led_component_buf {
-    ($Led:ty $(,)?) => {{
+    ($Led:ty, $NUM_LEDS:expr $(,)?) => {{
         use capsules::led::LedDriver;
         use core::mem::MaybeUninit;
-        static mut BUF: MaybeUninit<LedDriver<'static, $Led>> = MaybeUninit::uninit();
+        static mut BUF: MaybeUninit<LedDriver<'static, $Led, $NUM_LEDS>> = MaybeUninit::uninit();
         &mut BUF
     };};
 }
@@ -53,8 +53,8 @@ pub struct LedsComponent<L: 'static + Led, const NUM_LEDS: usize> {
     leds: &'static mut [&'static L; NUM_LEDS],
 }
 
-impl<L: 'static + Led, const NUM_LEDS: usize> LedsComponent<L> {
-    pub fn new(leds: &'static mut [&'static L]) -> Self {
+impl<L: 'static + Led, const NUM_LEDS: usize> LedsComponent<L, NUM_LEDS> {
+    pub fn new(leds: &'static mut [&'static L; NUM_LEDS]) -> Self {
         Self { leds }
     }
 }
@@ -66,7 +66,7 @@ impl<L: 'static + Led, const NUM_LEDS: usize> Component for LedsComponent<L, NUM
     unsafe fn finalize(self, static_buffer: Self::StaticInput) -> Self::Output {
         static_init_half!(
             static_buffer,
-            LedDriver<'static, L>,
+            LedDriver<'static, L, NUM_LEDS>,
             LedDriver::new(self.leds)
         )
     }

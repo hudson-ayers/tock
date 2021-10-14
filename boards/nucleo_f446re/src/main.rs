@@ -54,6 +54,7 @@ struct NucleoF446RE {
     led: &'static capsules::led::LedDriver<
         'static,
         LedHigh<'static, stm32f446re::gpio::Pin<'static>>,
+        1,
     >,
     button: &'static capsules::button::Button<'static, stm32f446re::gpio::Pin<'static>>,
     alarm: &'static capsules::alarm::AlarmDriver<
@@ -306,7 +307,8 @@ pub unsafe fn main() {
         LedHigh::new(gpio_ports.get_pin(stm32f446re::gpio::PinId::PA05).unwrap()),
     ))
     .finalize(components::led_component_buf!(
-        LedHigh<'static, stm32f446re::gpio::Pin>
+        LedHigh<'static, stm32f446re::gpio::Pin>,
+        1
     ));
 
     // BUTTONs

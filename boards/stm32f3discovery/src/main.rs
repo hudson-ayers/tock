@@ -59,6 +59,7 @@ struct STM32F3Discovery {
     led: &'static capsules::led::LedDriver<
         'static,
         LedHigh<'static, stm32f303xc::gpio::Pin<'static>>,
+        8,
     >,
     button: &'static capsules::button::Button<'static, stm32f303xc::gpio::Pin<'static>>,
     ninedof: &'static capsules::ninedof::NineDof<'static>,
@@ -487,7 +488,8 @@ pub unsafe fn main() {
         ),
     ))
     .finalize(components::led_component_buf!(
-        LedHigh<'static, stm32f303xc::gpio::Pin<'static>>
+        LedHigh<'static, stm32f303xc::gpio::Pin<'static>>,
+        8
     ));
 
     // BUTTONs

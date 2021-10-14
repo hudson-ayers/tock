@@ -77,7 +77,11 @@ struct Imxrt1050EVKB {
     console: &'static capsules::console::Console<'static>,
     gpio: &'static capsules::gpio::GPIO<'static, imxrt1050::gpio::Pin<'static>>,
     ipc: kernel::ipc::IPC<NUM_PROCS, NUM_UPCALLS_IPC>,
-    led: &'static capsules::led::LedDriver<'static, LedLow<'static, imxrt1050::gpio::Pin<'static>>>,
+    led: &'static capsules::led::LedDriver<
+        'static,
+        LedLow<'static, imxrt1050::gpio::Pin<'static>>,
+        1,
+    >,
     ninedof: &'static capsules::ninedof::NineDof<'static>,
 
     scheduler: &'static RoundRobinSched<'static>,
@@ -338,7 +342,8 @@ pub unsafe fn main() {
         LedLow::new(peripherals.ports.pin(imxrt1050::gpio::PinId::AdB0_09)),
     ))
     .finalize(components::led_component_buf!(
-        LedLow<'static, imxrt1050::gpio::Pin<'static>>
+        LedLow<'static, imxrt1050::gpio::Pin<'static>>,
+        1
     ));
 
     // BUTTONs

@@ -47,6 +47,7 @@ struct MspExp432P401R {
     led: &'static capsules::led::LedDriver<
         'static,
         kernel::hil::led::LedHigh<'static, msp432::gpio::IntPin<'static>>,
+        3,
     >,
     console: &'static capsules::console::Console<'static>,
     button: &'static capsules::button::Button<'static, msp432::gpio::IntPin<'static>>,
@@ -267,7 +268,8 @@ pub unsafe fn main() {
         ),
     ))
     .finalize(components::led_component_buf!(
-        kernel::hil::led::LedHigh<'static, msp432::gpio::IntPin>
+        kernel::hil::led::LedHigh<'static, msp432::gpio::IntPin>,
+        3
     ));
 
     // Setup user-GPIOs

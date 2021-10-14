@@ -48,8 +48,11 @@ pub static mut STACK_MEMORY: [u8; 0x900] = [0; 0x900];
 /// A structure representing this platform that holds references to all
 /// capsules for this platform. We've included an alarm and console.
 struct HiFive1 {
-    led:
-        &'static capsules::led::LedDriver<'static, LedLow<'static, sifive::gpio::GpioPin<'static>>>,
+    led: &'static capsules::led::LedDriver<
+        'static,
+        LedLow<'static, sifive::gpio::GpioPin<'static>>,
+        3,
+    >,
     console: &'static capsules::console::Console<'static>,
     lldb: &'static capsules::low_level_debug::LowLevelDebug<
         'static,
@@ -173,7 +176,8 @@ pub unsafe fn main() {
         LedLow::new(&peripherals.gpio_port[21]), // Blue
     ))
     .finalize(components::led_component_buf!(
-        LedLow<'static, sifive::gpio::GpioPin>
+        LedLow<'static, sifive::gpio::GpioPin>,
+        3
     ));
 
     peripherals
