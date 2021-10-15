@@ -460,13 +460,9 @@ pub unsafe fn main() {
     )
     .finalize(components::gpio_component_buf!(sam4l::gpio::GPIOPin));
 
-    let led = LedsComponent::new(components::led_component_helper!(
+    let led = LedsComponent::new().finalize(components::led_component_helper!(
         LedHigh<'static, sam4l::gpio::GPIOPin>,
         LedHigh::new(&peripherals.pc[10]),
-    ))
-    .finalize(components::led_component_buf!(
-        LedHigh<'static, sam4l::gpio::GPIOPin>,
-        1
     ));
 
     let button = components::button::ButtonComponent::new(
