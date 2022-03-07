@@ -197,23 +197,19 @@ impl Driver for Console<'_> {
         allow_num: usize,
         slice: Option<AppSlice<Shared, u8>>,
     ) -> ReturnCode {
-        match allow_num {
-            1 => self
-                .apps
-                .enter(appid, |app, _| {
+        self.apps
+            .enter(appid, |app, _| match allow_num {
+                1 => {
                     app.write_buffer = slice;
                     ReturnCode::SUCCESS
-                })
-                .unwrap_or_else(|err| err.into()),
-            2 => self
-                .apps
-                .enter(appid, |app, _| {
+                }
+                2 => {
                     app.read_buffer = slice;
                     ReturnCode::SUCCESS
-                })
-                .unwrap_or_else(|err| err.into()),
-            _ => ReturnCode::ENOSUPPORT,
-        }
+                }
+                _ => ReturnCode::ENOSUPPORT,
+            })
+            .unwrap_or_else(|err| err.into())
     }
 
     /// Setup callbacks.
@@ -227,21 +223,19 @@ impl Driver for Console<'_> {
         callback: Option<Callback>,
         app_id: AppId,
     ) -> ReturnCode {
-        match subscribe_num {
-            1 /* putstr/write_done */ => {
-                self.apps.enter(app_id, |app, _| {
+        self.apps
+            .enter(app_id, |app, _| match subscribe_num {
+                1 => {
                     app.write_callback = callback;
                     ReturnCode::SUCCESS
-                }).unwrap_or_else(|err| err.into())
-            },
-            2 /* getnstr done */ => {
-                self.apps.enter(app_id, |app, _| {
+                }
+                2 => {
                     app.read_callback = callback;
                     ReturnCode::SUCCESS
-                }).unwrap_or_else(|err| err.into())
-            },
-            _ => ReturnCode::ENOSUPPORT
-        }
+                }
+                _ => ReturnCode::ENOSUPPORT,
+            })
+            .unwrap_or_else(|err| err.into())
     }
 
     /// Initiate serial transfers
@@ -256,26 +250,24 @@ impl Driver for Console<'_> {
     /// - `3`: Cancel any in progress receives and return (via callback)
     ///        what has been received so far.
     fn command(&self, cmd_num: usize, arg1: usize, _: usize, appid: AppId) -> ReturnCode {
-        match cmd_num {
-            0 /* check if present */ => ReturnCode::SUCCESS,
-            1 /* putstr */ => {
-                let len = arg1;
-                self.apps.enter(appid, |app, _| {
+        self.apps
+            .enter(appid, |app, _| match cmd_num {
+                0 => ReturnCode::SUCCESS,
+                1 => {
+                    let len = arg1;
                     self.send_new(appid, app, len)
-                }).unwrap_or_else(|err| err.into())
-            },
-            2 /* getnstr */ => {
-                let len = arg1;
-                self.apps.enter(appid, |app, _| {
+                }
+                2 => {
+                    let len = arg1;
                     self.receive_new(appid, app, len)
-                }).unwrap_or_else(|err| err.into())
-            },
-            3 /* abort rx */ => {
-                self.uart.receive_abort();
-                ReturnCode::SUCCESS
-            }
-            _ => ReturnCode::ENOSUPPORT
-        }
+                }
+                3 => {
+                    self.uart.receive_abort();
+                    ReturnCode::SUCCESS
+                }
+                _ => ReturnCode::ENOSUPPORT,
+            })
+            .unwrap_or_else(|err| err.into())
     }
 }
 
