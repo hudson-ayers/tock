@@ -231,7 +231,7 @@ register_bitfields! [u32,
 ];
 
 /// Variant describes part variant, hardware version, and production configuration.
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 #[repr(u32)]
 enum Variant {
     AAA0 = 0x41414130,
@@ -251,7 +251,7 @@ enum Variant {
     Unspecified = 0xffffffff,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 #[repr(u32)]
 enum Part {
     N52832 = 0x52832,
@@ -260,7 +260,7 @@ enum Part {
     Unspecified = 0xffffffff,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 #[repr(u32)]
 enum Package {
     QF = 0x2000,
@@ -271,7 +271,7 @@ enum Package {
     Unspecified = 0xffffffff,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq)]
 #[repr(u32)]
 enum Ram {
     K16 = 0x10,
@@ -282,7 +282,6 @@ enum Ram {
     Unspecified = 0xffffffff,
 }
 
-#[derive(Debug)]
 #[repr(u32)]
 enum Flash {
     K128 = 0x80,
@@ -440,11 +439,11 @@ impl fmt::Display for Ficr {
         write!(
             f,
             "NRF52 HW INFO: Variant: {:?}, Part: {:?}, Package: {:?}, Ram: {:?}, Flash: {:?}",
-            self.variant(),
-            self.part(),
-            self.package(),
-            self.ram(),
-            self.flash()
+            self.variant() as u32,
+            self.part() as u32,
+            self.package() as u32,
+            self.ram() as u32,
+            self.flash() as u32
         )
     }
 }
