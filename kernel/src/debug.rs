@@ -91,11 +91,11 @@ pub trait IoWrite {
 /// Tock default panic routine.
 ///
 /// **NOTE:** The supplied `writer` must be synchronous.
-pub unsafe fn panic<L: hil::led::Led, W: Write + IoWrite, C: Chip>(
+pub unsafe fn panic<L: hil::led::Led, W: Write + IoWrite, C: Chip, F: Fn()>(
     leds: &mut [&mut L],
     writer: &mut W,
     panic_info: &PanicInfo,
-    nop: &dyn Fn(),
+    nop: &F,
     processes: &'static [Option<&'static dyn ProcessType>],
     chip: &'static Option<&'static C>,
 ) -> ! {
@@ -113,7 +113,7 @@ pub unsafe fn panic<L: hil::led::Led, W: Write + IoWrite, C: Chip>(
 /// This opaque method should always be called at the beginning of a board's
 /// panic method to allow hooks for any core kernel cleanups that may be
 /// appropriate.
-pub unsafe fn panic_begin(nop: &dyn Fn()) {
+pub unsafe fn panic_begin<F: Fn()>(nop: &F) {
     // Let any outstanding uart DMA's finish
     for _ in 0..200000 {
         nop();

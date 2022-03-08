@@ -132,14 +132,14 @@ impl fmt::Debug for ProcessLoadError {
 /// Returns `Ok(())` if process discovery went as expected. Returns a
 /// `ProcessLoadError` if something goes wrong during TBF parsing or process
 /// creation.
-pub fn load_processes<C: Chip>(
+pub fn load_processes<C: Chip, CAP: ProcessManagementCapability>(
     kernel: &'static Kernel,
     chip: &'static C,
     app_flash: &'static [u8],
     app_memory: &'static mut [u8],
     procs: &'static mut [Option<&'static dyn ProcessType>],
     fault_response: FaultResponse,
-    _capability: &dyn ProcessManagementCapability,
+    _capability: &CAP,
 ) -> Result<(), ProcessLoadError> {
     if config::CONFIG.debug_load_processes {
         debug!(
