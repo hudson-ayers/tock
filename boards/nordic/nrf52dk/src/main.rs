@@ -65,9 +65,9 @@
 // https://github.com/rust-lang/rust/issues/62184.
 #![cfg_attr(not(doc), no_main)]
 #![feature(const_in_array_repeat_expressions)]
-#![deny(missing_docs)]
 
 use capsules::virtual_alarm::VirtualMuxAlarm;
+use capsules::virtual_uart::{MuxUart, UartDevice};
 use kernel::common::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferredCallClientState};
 use kernel::component::Component;
 #[allow(unused_imports)]
@@ -103,12 +103,6 @@ const _SPI_CLK: Pin = Pin::P0_24;
 /// UART Writer
 pub mod io;
 
-// FIXME: Ideally this should be replaced with Rust's builtin tests by conditional compilation
-//
-// Also read the instructions in `tests` how to run the tests
-#[allow(dead_code)]
-mod tests;
-
 // State for loading and holding applications.
 // How should the kernel respond when a process faults.
 const FAULT_RESPONSE: kernel::procs::FaultResponse = kernel::procs::FaultResponse::Panic;
@@ -126,6 +120,9 @@ static mut CHIP: Option<&'static nrf52832::chip::NRF52<Nrf52832DefaultPeripheral
 #[link_section = ".stack_buffer"]
 pub static mut STACK_MEMORY: [u8; 0x1000] = [0; 0x1000];
 
+pub struct PCapability;
+unsafe impl capabilities::ProcessManagementCapability for PCapability {}
+
 /// Supported drivers by the platform
 pub struct Platform {
     ble_radio: &'static capsules::ble_advertising_driver::BLE<
@@ -136,9 +133,13 @@ pub struct Platform {
     button: &'static capsules::button::Button<'static, nrf52832::gpio::GPIOPin<'static>>,
     pconsole: &'static capsules::process_console::ProcessConsole<
         'static,
-        components::process_console::Capability,
+        PCapability,
+        UartDevice<'static, nrf52832::uart::Uarte<'static>>,
     >,
-    console: &'static capsules::console::Console<'static>,
+    console: &'static capsules::console::Console<
+        'static,
+        capsules::virtual_uart::UartDevice<'static, nrf52832::uart::Uarte<'static>>,
+    >,
     gpio: &'static capsules::gpio::GPIO<'static, nrf52832::gpio::GPIOPin<'static>>,
     led: &'static capsules::led::LED<'static, nrf52832::gpio::GPIOPin<'static>>,
     rng: &'static capsules::rng::RngDriver<'static>,
@@ -299,13 +300,26 @@ pub unsafe fn reset_handler() {
         .finalize(components::alarm_mux_component_helper!(nrf52832::rtc::Rtc));
     let alarm = components::alarm::AlarmDriverComponent::new(board_kernel, mux_alarm)
         .finalize(components::alarm_component_helper!(nrf52832::rtc::Rtc));
-    let uart_channel = UartChannel::Pins(UartPins::new(UART_RTS, UART_TXD, UART_CTS, UART_RXD));
-    let channel = nrf52_components::UartChannelComponent::new(
+    let uart_pins = UartPins::new(UART_RTS, UART_TXD, UART_CTS, UART_RXD);
+    let channel = {
+        &base_peripherals.uarte0.initialize(
+            nrf52832::pinmux::Pinmux::new(uart_pins.txd as u32),
+            nrf52832::pinmux::Pinmux::new(uart_pins.rxd as u32),
+            uart_pins
+                .cts
+                .map(|x| nrf52832::pinmux::Pinmux::new(x as u32)),
+            uart_pins
+                .rts
+                .map(|x| nrf52832::pinmux::Pinmux::new(x as u32)),
+        );
+        &base_peripherals.uarte0
+    };
+    /*nrf52_components::UartChannelComponent::new(
         uart_channel,
         mux_alarm,
         &base_peripherals.uarte0,
     )
-    .finalize(());
+    .finalize(());*/
 
     let dynamic_deferred_call_clients =
         static_init!([DynamicDeferredCallClientState; 2], Default::default());
@@ -316,18 +330,120 @@ pub unsafe fn reset_handler() {
     DynamicDeferredCall::set_global_instance(dynamic_deferred_caller);
 
     // Create a shared UART channel for the console and for kernel debug.
-    let uart_mux =
-        components::console::UartMuxComponent::new(channel, 115200, dynamic_deferred_caller)
-            .finalize(());
+    use capsules::console;
+    use kernel::capabilities;
+    use kernel::common::dynamic_deferred_call::DynamicDeferredCall;
+    use kernel::component::Component;
+    use kernel::create_capability;
+    use kernel::hil;
+    use kernel::hil::uart;
+    use kernel::static_init;
+    let uart_mux = static_init!(
+        MuxUart<'static, nrf52832::uart::Uarte<'static>>,
+        MuxUart::new(
+            channel,
+            &mut capsules::virtual_uart::RX_BUF,
+            115200,
+            dynamic_deferred_caller,
+        )
+    );
+    uart_mux.initialize_callback_handle(
+        dynamic_deferred_caller
+            .register(uart_mux)
+            .expect("no deferred call slot available for uart mux"),
+    );
 
-    let pconsole =
-        components::process_console::ProcessConsoleComponent::new(board_kernel, uart_mux)
-            .finalize(());
+    uart_mux.initialize();
+    hil::uart::Transmit::set_transmit_client(channel, uart_mux);
+    hil::uart::Receive::set_receive_client(channel, uart_mux);
+
+    //       components::console::UartMuxComponent::new(channel, 115200, dynamic_deferred_caller)
+    //         .finalize(());
+
+    use capsules::process_console;
+    // Create virtual device for console.
+    let console_uart = static_init!(
+        UartDevice<'static, nrf52832::uart::Uarte<'static>>,
+        UartDevice::new(uart_mux, true)
+    );
+    console_uart.setup();
+
+    let pconsole = static_init!(
+        process_console::ProcessConsole<
+            'static,
+            PCapability,
+            UartDevice<'static, nrf52832::uart::Uarte<'static>>,
+        >,
+        process_console::ProcessConsole::new(
+            console_uart,
+            &mut process_console::WRITE_BUF,
+            &mut process_console::READ_BUF,
+            &mut process_console::COMMAND_BUF,
+            board_kernel,
+            PCapability,
+        )
+    );
+    hil::uart::Transmit::set_transmit_client(console_uart, pconsole);
+    hil::uart::Receive::set_receive_client(console_uart, pconsole);
 
     // Setup the console.
-    let console = components::console::ConsoleComponent::new(board_kernel, uart_mux).finalize(());
+    let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
+
+    // Create virtual device for console.
+    let console_uart = static_init!(
+        UartDevice<'static, nrf52832::uart::Uarte<'static>>,
+        UartDevice::new(uart_mux, true)
+    );
+    console_uart.setup();
+
+    let console = static_init!(
+        console::Console<'static, UartDevice<'static, nrf52832::uart::Uarte<'static>>>,
+        console::Console::new(
+            console_uart,
+            &mut console::WRITE_BUF,
+            &mut console::READ_BUF,
+            board_kernel.create_grant(&grant_cap)
+        )
+    );
+    hil::uart::Transmit::set_transmit_client(console_uart, console);
+    hil::uart::Receive::set_receive_client(console_uart, console);
+    //components::console::ConsoleComponent::new(board_kernel, uart_mux).finalize(());
     // Create the debugger object that handles calls to `debug!()`.
-    components::debug_writer::DebugWriterComponent::new(uart_mux).finalize(());
+    {
+        use capsules::virtual_uart::{MuxUart, UartDevice};
+        use kernel::capabilities;
+        use kernel::common::ring_buffer::RingBuffer;
+        use kernel::component::Component;
+        use kernel::hil;
+        use kernel::hil::uart;
+        use kernel::static_init;
+        // The sum of the output_buf and internal_buf is set to 1024 bytes in order to avoid excessive
+        // padding between kernel memory and application memory (which often needs to be aligned to at
+        // least a 1kB boundary). This is not _semantically_ critical, but helps keep buffers on 1kB
+        // boundaries in some cases. Of course, these definitions are only advisory, and individual boards
+        // can choose to pass in their own buffers with different lengths.
+        let buf = static_init!([u8; 1024], [0; 1024]);
+        let (output_buf, internal_buf) = buf.split_at_mut(64);
+
+        // Create virtual device for kernel debug.
+        let debugger_uart = static_init!(
+            UartDevice<'static, nrf52832::uart::Uarte<'static>>,
+            UartDevice::new(uart_mux, false)
+        );
+        debugger_uart.setup();
+        let ring_buffer = static_init!(RingBuffer<'static, u8>, RingBuffer::new(internal_buf));
+        let debugger = static_init!(
+            kernel::debug::DebugWriter,
+            kernel::debug::DebugWriter::new(debugger_uart, output_buf, ring_buffer)
+        );
+        hil::uart::Transmit::set_transmit_client(debugger_uart, debugger);
+
+        let debug_wrapper = static_init!(
+            kernel::debug::DebugWriterWrapper,
+            kernel::debug::DebugWriterWrapper::new(debugger)
+        );
+        kernel::debug::set_debug_writer_wrapper(debug_wrapper);
+    }
 
     let ble_radio =
         nrf52_components::BLEComponent::new(board_kernel, &base_peripherals.ble_radio, mux_alarm)

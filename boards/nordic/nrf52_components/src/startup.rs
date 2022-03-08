@@ -122,10 +122,10 @@ impl Component for NrfClockComponent {
 /// Pins for the UART
 #[derive(Debug)]
 pub struct UartPins {
-    rts: Option<Pin>,
-    txd: Pin,
-    cts: Option<Pin>,
-    rxd: Pin,
+    pub rts: Option<Pin>,
+    pub txd: Pin,
+    pub cts: Option<Pin>,
+    pub rxd: Pin,
 }
 
 impl UartPins {

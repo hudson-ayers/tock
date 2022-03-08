@@ -132,8 +132,8 @@ pub static mut READ_BUF: [u8; 4] = [0; 4];
 // characters, limiting arguments to 25 bytes or so seems fine for now.
 pub static mut COMMAND_BUF: [u8; 32] = [0; 32];
 
-pub struct ProcessConsole<'a, C: ProcessManagementCapability> {
-    uart: &'a dyn uart::UartData<'a>,
+pub struct ProcessConsole<'a, C: ProcessManagementCapability, U: uart::UartData<'a> + 'a> {
+    uart: &'a U,
     tx_in_progress: Cell<bool>,
     tx_buffer: TakeCell<'static, [u8]>,
     rx_in_progress: Cell<bool>,
@@ -152,16 +152,16 @@ pub struct ProcessConsole<'a, C: ProcessManagementCapability> {
     capability: C,
 }
 
-impl<'a, C: ProcessManagementCapability> ProcessConsole<'a, C> {
+impl<'a, C: ProcessManagementCapability, U: uart::UartData<'a> + 'a> ProcessConsole<'a, C, U> {
     pub fn new(
-        uart: &'a dyn uart::UartData<'a>,
+        uart: &'a U,
         tx_buffer: &'static mut [u8],
         rx_buffer: &'static mut [u8],
         cmd_buffer: &'static mut [u8],
         kernel: &'static Kernel,
         capability: C,
-    ) -> ProcessConsole<'a, C> {
-        ProcessConsole {
+    ) -> Self {
+        Self {
             uart: uart,
             tx_in_progress: Cell::new(false),
             tx_buffer: TakeCell::new(tx_buffer),
@@ -299,7 +299,9 @@ impl<'a, C: ProcessManagementCapability> ProcessConsole<'a, C> {
             }
         });
         self.command_buffer.map(|command| {
-            command.get_mut(0).map(|cmd| { *cmd = 0; });
+            command.get_mut(0).map(|cmd| {
+                *cmd = 0;
+            });
         });
         self.command_index.set(0);
     }
@@ -333,7 +335,9 @@ impl<'a, C: ProcessManagementCapability> ProcessConsole<'a, C> {
     }
 }
 
-impl<'a, C: ProcessManagementCapability> uart::TransmitClient for ProcessConsole<'a, C> {
+impl<'a, C: ProcessManagementCapability, U: uart::UartData<'a> + 'a> uart::TransmitClient
+    for ProcessConsole<'a, C, U>
+{
     fn transmitted_buffer(&self, buffer: &'static mut [u8], _tx_len: usize, _rcode: ReturnCode) {
         self.tx_buffer.replace(buffer);
         self.tx_in_progress.set(false);
@@ -346,7 +350,9 @@ impl<'a, C: ProcessManagementCapability> uart::TransmitClient for ProcessConsole
         }
     }
 }
-impl<'a, C: ProcessManagementCapability> uart::ReceiveClient for ProcessConsole<'a, C> {
+impl<'a, C: ProcessManagementCapability, U: uart::UartData<'a> + 'a> uart::ReceiveClient
+    for ProcessConsole<'a, C, U>
+{
     fn received_buffer(
         &self,
         read_buf: &'static mut [u8],
@@ -368,7 +374,9 @@ impl<'a, C: ProcessManagementCapability> uart::ReceiveClient for ProcessConsole<
                                 // Backspace, echo and remove last byte
                                 // Note echo is '\b \b' to erase
                                 self.write_bytes(&['\x08' as u8, ' ' as u8, '\x08' as u8]);
-                                command.get_mut(index - 1).map(|cmd| { *cmd = '\0' as u8; });
+                                command.get_mut(index - 1).map(|cmd| {
+                                    *cmd = '\0' as u8;
+                                });
                                 self.command_index.set(index - 1);
                             } else if index < (command.len() - 1) && byte < 128 {
                                 // For some reason, sometimes reads return > 127 but no error,
@@ -376,9 +384,9 @@ impl<'a, C: ProcessManagementCapability> uart::ReceiveClient for ProcessConsole<
 
                                 // Echo the byte and store it
                                 self.write_byte(byte);
-                                command.get_mut(index).map(|cmd| { *cmd = byte });
+                                command.get_mut(index).map(|cmd| *cmd = byte);
                                 self.command_index.set(index + 1);
-                                command.get_mut(index + 1).map(|cmd| { *cmd = 0 });
+                                command.get_mut(index + 1).map(|cmd| *cmd = 0);
                             }
                         }
                     });

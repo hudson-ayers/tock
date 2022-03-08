@@ -62,8 +62,8 @@ pub struct App {
 pub static mut WRITE_BUF: [u8; 64] = [0; 64];
 pub static mut READ_BUF: [u8; 64] = [0; 64];
 
-pub struct Console<'a> {
-    uart: &'a dyn uart::UartData<'a>,
+pub struct Console<'a, U: uart::UartData<'a> + 'a> {
+    uart: &'a U,
     apps: Grant<App>,
     tx_in_progress: OptionalCell<AppId>,
     tx_buffer: TakeCell<'static, [u8]>,
@@ -71,14 +71,14 @@ pub struct Console<'a> {
     rx_buffer: TakeCell<'static, [u8]>,
 }
 
-impl<'a> Console<'a> {
+impl<'a, U: uart::UartData<'a> + 'a> Console<'a, U> {
     pub fn new(
-        uart: &'a dyn uart::UartData<'a>,
+        uart: &'a U,
         tx_buffer: &'static mut [u8],
         rx_buffer: &'static mut [u8],
         grant: Grant<App>,
-    ) -> Console<'a> {
-        Console {
+    ) -> Self {
+        Self {
             uart: uart,
             apps: grant,
             tx_in_progress: OptionalCell::empty(),
@@ -184,7 +184,7 @@ impl<'a> Console<'a> {
     }
 }
 
-impl Driver for Console<'_> {
+impl<'a, U: uart::UartData<'a> + 'a> Driver for Console<'a, U> {
     /// Setup shared buffers.
     ///
     /// ### `allow_num`
@@ -271,7 +271,7 @@ impl Driver for Console<'_> {
     }
 }
 
-impl uart::TransmitClient for Console<'_> {
+impl<'a, U: uart::UartData<'a> + 'a> uart::TransmitClient for Console<'a, U> {
     fn transmitted_buffer(&self, buffer: &'static mut [u8], _tx_len: usize, _rcode: ReturnCode) {
         // Either print more from the AppSlice or send a callback to the
         // application.
@@ -336,7 +336,7 @@ impl uart::TransmitClient for Console<'_> {
     }
 }
 
-impl uart::ReceiveClient for Console<'_> {
+impl<'a, U: uart::UartData<'a> + 'a> uart::ReceiveClient for Console<'a, U> {
     fn received_buffer(
         &self,
         buffer: &'static mut [u8],

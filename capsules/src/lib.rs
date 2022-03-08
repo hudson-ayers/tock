@@ -2,8 +2,6 @@
 #![forbid(unsafe_code)]
 #![no_std]
 
-pub mod test;
-
 #[macro_use]
 pub mod net;
 
