@@ -552,53 +552,47 @@ where
         interval: usize,
         appid: kernel::AppId,
     ) -> ReturnCode {
-        match command_num {
-            // Start periodic advertisements
-            0 => self
-                .app
-                .enter(appid, |app, _| {
-                    if let Some(BLEState::Initialized) = app.process_status {
-                        let pdu_type = data as AdvPduType;
-                        match pdu_type {
-                            ADV_IND | ADV_NONCONN_IND | ADV_SCAN_IND => {
-                                app.pdu_type = pdu_type;
-                                app.process_status = Some(BLEState::AdvertisingIdle);
-                                app.random_nonce = self.alarm.now();
-                                app.advertisement_interval_ms = cmp::max(20, interval as u32);
-                                app.set_next_alarm::<A::Frequency>(self.alarm.now());
-                                self.reset_active_alarm();
-                                ReturnCode::SUCCESS
+        self.app
+            .enter(appid, |app, _| {
+                match command_num {
+                    // Start periodic advertisements
+                    0 => {
+                        if let Some(BLEState::Initialized) = app.process_status {
+                            let pdu_type = data as AdvPduType;
+                            match pdu_type {
+                                ADV_IND | ADV_NONCONN_IND | ADV_SCAN_IND => {
+                                    app.pdu_type = pdu_type;
+                                    app.process_status = Some(BLEState::AdvertisingIdle);
+                                    app.random_nonce = self.alarm.now();
+                                    app.advertisement_interval_ms = cmp::max(20, interval as u32);
+                                    app.set_next_alarm::<A::Frequency>(self.alarm.now());
+                                    self.reset_active_alarm();
+                                    ReturnCode::SUCCESS
+                                }
+                                _ => ReturnCode::EINVAL,
                             }
-                            _ => ReturnCode::EINVAL,
+                        } else {
+                            ReturnCode::EBUSY
                         }
-                    } else {
-                        ReturnCode::EBUSY
                     }
-                })
-                .unwrap_or_else(|err| err.into()),
 
-            // Stop periodic advertisements or passive scanning
-            1 => self
-                .app
-                .enter(appid, |app, _| match app.process_status {
-                    Some(BLEState::AdvertisingIdle) | Some(BLEState::ScanningIdle) => {
-                        app.process_status = Some(BLEState::Initialized);
-                        ReturnCode::SUCCESS
-                    }
-                    _ => ReturnCode::EBUSY,
-                })
-                .unwrap_or_else(|err| err.into()),
+                    // Stop periodic advertisements or passive scanning
+                    1 => match app.process_status {
+                        Some(BLEState::AdvertisingIdle) | Some(BLEState::ScanningIdle) => {
+                            app.process_status = Some(BLEState::Initialized);
+                            ReturnCode::SUCCESS
+                        }
+                        _ => ReturnCode::EBUSY,
+                    },
 
-            // Configure transmitted power
-            // BLUETOOTH SPECIFICATION Version 4.2 [Vol 6, Part A], section 3
-            //
-            // Minimum Output Power:    0.01 mW (-20 dBm)
-            // Maximum Output Power:    10 mW (+10 dBm)
-            //
-            // data - Transmitting power in dBm
-            2 => {
-                self.app
-                    .enter(appid, |app, _| {
+                    // Configure transmitted power
+                    // BLUETOOTH SPECIFICATION Version 4.2 [Vol 6, Part A], section 3
+                    //
+                    // Minimum Output Power:    0.01 mW (-20 dBm)
+                    // Maximum Output Power:    10 mW (+10 dBm)
+                    //
+                    // data - Transmitting power in dBm
+                    2 => {
                         if app.process_status != Some(BLEState::ScanningIdle)
                             && app.process_status != Some(BLEState::AdvertisingIdle)
                         {
@@ -616,27 +610,24 @@ where
                         } else {
                             ReturnCode::EBUSY
                         }
-                    })
-                    .unwrap_or_else(|err| err.into())
-            }
-
-            // Passive scanning mode
-            5 => self
-                .app
-                .enter(appid, |app, _| {
-                    if let Some(BLEState::Initialized) = app.process_status {
-                        app.process_status = Some(BLEState::ScanningIdle);
-                        app.set_next_alarm::<A::Frequency>(self.alarm.now());
-                        self.reset_active_alarm();
-                        ReturnCode::SUCCESS
-                    } else {
-                        ReturnCode::EBUSY
                     }
-                })
-                .unwrap_or_else(|err| err.into()),
 
-            _ => ReturnCode::ENOSUPPORT,
-        }
+                    // Passive scanning mode
+                    5 => {
+                        if let Some(BLEState::Initialized) = app.process_status {
+                            app.process_status = Some(BLEState::ScanningIdle);
+                            app.set_next_alarm::<A::Frequency>(self.alarm.now());
+                            self.reset_active_alarm();
+                            ReturnCode::SUCCESS
+                        } else {
+                            ReturnCode::EBUSY
+                        }
+                    }
+
+                    _ => ReturnCode::ENOSUPPORT,
+                }
+            })
+            .unwrap_or_else(|err| err.into())
     }
 
     fn allow(
@@ -645,37 +636,35 @@ where
         allow_num: usize,
         slice: Option<kernel::AppSlice<kernel::Shared, u8>>,
     ) -> ReturnCode {
-        match allow_num {
-            // Advertisement buffer
-            0 => self
-                .app
-                .enter(appid, |app, _| {
-                    app.adv_data = slice;
-                    if let ReturnCode::SUCCESS = app.generate_random_address(appid) {
-                        app.process_status = Some(BLEState::Initialized);
-                        ReturnCode::SUCCESS
-                    } else {
-                        ReturnCode::FAIL
+        self.app
+            .enter(appid, |app, _| {
+                match allow_num {
+                    // Advertisement buffer
+                    0 => {
+                        app.adv_data = slice;
+                        if let ReturnCode::SUCCESS = app.generate_random_address(appid) {
+                            app.process_status = Some(BLEState::Initialized);
+                            ReturnCode::SUCCESS
+                        } else {
+                            ReturnCode::FAIL
+                        }
                     }
-                })
-                .unwrap_or_else(|err| err.into()),
 
-            // Passive scanning buffer
-            1 => self
-                .app
-                .enter(appid, |app, _| match app.process_status {
-                    Some(BLEState::NotInitialized) | Some(BLEState::Initialized) => {
-                        app.scan_buffer = slice;
-                        app.process_status = Some(BLEState::Initialized);
-                        ReturnCode::SUCCESS
-                    }
-                    _ => ReturnCode::EINVAL,
-                })
-                .unwrap_or_else(|err| err.into()),
+                    // Passive scanning buffer
+                    1 => match app.process_status {
+                        Some(BLEState::NotInitialized) | Some(BLEState::Initialized) => {
+                            app.scan_buffer = slice;
+                            app.process_status = Some(BLEState::Initialized);
+                            ReturnCode::SUCCESS
+                        }
+                        _ => ReturnCode::EINVAL,
+                    },
 
-            // Operation not supported
-            _ => ReturnCode::ENOSUPPORT,
-        }
+                    // Operation not supported
+                    _ => ReturnCode::ENOSUPPORT,
+                }
+            })
+            .unwrap_or_else(|err| err.into())
     }
 
     fn subscribe(
