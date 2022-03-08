@@ -492,7 +492,7 @@ pub unsafe extern "C" fn hard_fault_handler_arm_v7m() {
     }
 }
 
-pub unsafe fn print_cortexm_state(writer: &mut dyn Write) {
+pub unsafe fn print_cortexm_state<W: Write>(writer: &mut W) {
     let _ccr = syscall::SCB_REGISTERS[0];
     let cfsr = syscall::SCB_REGISTERS[1];
     let hfsr = syscall::SCB_REGISTERS[2];

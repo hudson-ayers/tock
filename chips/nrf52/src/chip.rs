@@ -207,7 +207,7 @@ impl<'a, I: InterruptService<DeferredCallTask> + 'a> kernel::Chip for NRF52<'a, 
         cortexm4::support::atomic(f)
     }
 
-    unsafe fn print_state(&self, write: &mut dyn Write) {
+    unsafe fn print_state<W: Write>(&self, write: &mut W) {
         cortexm4::print_cortexm4_state(write);
     }
 }
