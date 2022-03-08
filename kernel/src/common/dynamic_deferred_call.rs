@@ -165,7 +165,7 @@ impl DynamicDeferredCall {
     /// `Some(false)`.
     pub fn set(&self, handle: DeferredCallHandle) -> Option<bool> {
         let DeferredCallHandle(client_pos) = handle;
-        let client_state = &self.client_states[client_pos];
+        let client_state = &self.client_states.get(client_pos)?;
 
         if let (call_set, true) = (&client_state.scheduled, client_state.client.is_some()) {
             if call_set.get() {

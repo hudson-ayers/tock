@@ -312,7 +312,7 @@ impl<'a, C: ProcessManagementCapability, U: uart::UartData<'a> + 'a> ProcessCons
         } else {
             self.tx_in_progress.set(true);
             self.tx_buffer.take().map(|buffer| {
-                buffer[0] = byte;
+                buffer.get_mut(0).map(|b| *b = byte);
                 self.uart.transmit_buffer(buffer, 1);
             });
             ReturnCode::SUCCESS
@@ -327,10 +327,16 @@ impl<'a, C: ProcessManagementCapability, U: uart::UartData<'a> + 'a> ProcessCons
             self.tx_buffer.take().map(|buffer| {
                 let len = cmp::min(bytes.len(), buffer.len());
                 // Copy elements of `bytes` into `buffer`
-                (&mut buffer[..len]).copy_from_slice(&bytes[..len]);
-                self.uart.transmit_buffer(buffer, len);
-            });
-            ReturnCode::SUCCESS
+                if let (Some(byte_slice), Some(buf)) = (bytes.get(..len), buffer.get_mut(..len)) {
+                    // TODO(Hudson): If we want to remove an extra panic, we can remove this
+                    //               copy_from_slice with an unsafe version.
+                    buf.copy_from_slice(byte_slice);
+                    self.uart.transmit_buffer(buffer, len);
+                    ReturnCode::SUCCESS
+                } else {
+                    ReturnCode::ESIZE
+                }
+            }).unwrap_or(ReturnCode::SUCCESS)
         }
     }
 }

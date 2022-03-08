@@ -610,12 +610,11 @@ pub(crate) fn parse_tbf_header(
 
                                 // Convert and store each wfr.
                                 for i in 0..number_regions {
-                                    wfr_pointer[i] = Some(
-                                        wfr_slice
+                                    let slice = wfr_slice
                                             .get(i * wfr_len..(i + 1) * wfr_len)
                                             .ok_or(TbfParseError::NotEnoughFlash)?
-                                            .try_into()?,
-                                    );
+                                            .try_into()?;
+                                    wfr_pointer.get_mut(i).map(|ptr| *ptr = Some(slice));
                                 }
                             } else {
                                 return Err(TbfParseError::BadTlvEntry(tlv_header.tipe as usize));

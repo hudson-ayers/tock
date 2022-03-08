@@ -153,9 +153,11 @@ impl Driver for IPC {
                             Some(i) => {
                                 if i > 8 {
                                     ReturnCode::EINVAL
-                                } else {
-                                    data.client_callbacks[i] = callback;
+                                } else if let Some(client_callback) = data.client_callbacks.get_mut(i) {
+                                    *client_callback = callback;
                                     ReturnCode::SUCCESS
+                                } else {
+                                    ReturnCode::ESIZE
                                 }
                             }
                             None => ReturnCode::EINVAL,

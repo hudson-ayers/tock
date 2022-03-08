@@ -200,7 +200,13 @@ impl<'a> AesECB<'a> {
             // Append keystream to the KEYSTREAM array
             if take > 0 {
                 for i in current_idx..current_idx + take {
-                    ks[i] = unsafe { ECB_DATA[i - current_idx + PLAINTEXT_END] }
+                    if let (Some(k), Some(ebc_data)) = (ks.get_mut(i), unsafe {
+                        ECB_DATA.get(i - current_idx + PLAINTEXT_END)
+                    }) {
+                        *k = *ebc_data;
+                    } else {
+                        return;
+                    }
                 }
                 self.current_idx.set(current_idx + take);
                 self.update_ctr();
@@ -219,12 +225,22 @@ impl<'a> AesECB<'a> {
                         let end = self.end_idx.get();
                         let len = end - start;
 
-                        for ((i, out), inp) in buf.as_mut()[start..end]
-                            .iter_mut()
-                            .enumerate()
-                            .zip(slice.as_ref()[0..len].iter())
+                        if let (Some(buf_mut), Some(slice_ref)) =
+                            (buf.get_mut(start..end), slice.as_ref().get(0..len))
                         {
-                            *out = ks[i] ^ *inp;
+                            for ((i, out), inp) in buf_mut
+                                .iter_mut()
+                                .enumerate()
+                                .zip(slice_ref.iter())
+                            {
+                                if let Some(k) = ks.get(i) {
+                                    *out = k ^ *inp;
+                                } else {
+                                    return;
+                                }
+                            }
+                        } else {
+                            return;
                         }
 
                         self.client

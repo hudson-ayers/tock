@@ -1783,6 +1783,9 @@ impl<C: 'static + Chip> Process<'_, C> {
         let memory_start_offset = app_memory_start as usize - remaining_memory.as_ptr() as usize;
         // First split the remaining memory into a slice that contains the
         // process memory and a slice that will not be used by this process.
+        if memory_start_offset + app_memory_size > remaining_memory.len() {
+            return Err(ProcessLoadError::NotEnoughMemory)
+        }
         let (app_memory_oversize, unused_memory) =
             remaining_memory.split_at_mut(memory_start_offset + app_memory_size);
         // Then since the process's memory need not start at the beginning of

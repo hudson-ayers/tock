@@ -388,12 +388,12 @@ impl hil::gpio::Configure for GPIOPin<'_> {
         };
         // PIN_CNF also holds the direction and the pin driving mode, settings we don't
         // want to overwrite!
-        gpio_regs.pin_cnf[self.pin as usize].modify(pin_config);
+        gpio_regs.pin_cnf.get(self.pin as usize).map(|pin| pin.modify(pin_config));
     }
 
     fn floating_state(&self) -> hil::gpio::FloatingState {
         let gpio_regs = &*self.gpio_registers;
-        match gpio_regs.pin_cnf[self.pin as usize].read_as_enum(PinConfig::PULL) {
+        match gpio_regs.pin_cnf.get(self.pin as usize).map(|pin| pin.read_as_enum(PinConfig::PULL)).flatten() {
             Some(PinConfig::PULL::Value::Pullup) => hil::gpio::FloatingState::PullUp,
             Some(PinConfig::PULL::Value::Pulldown) => hil::gpio::FloatingState::PullDown,
             Some(PinConfig::PULL::Value::Disabled) => hil::gpio::FloatingState::PullNone,
@@ -403,7 +403,7 @@ impl hil::gpio::Configure for GPIOPin<'_> {
 
     fn make_output(&self) -> hil::gpio::Configuration {
         let gpio_regs = &*self.gpio_registers;
-        gpio_regs.pin_cnf[self.pin as usize].modify(PinConfig::DIR::Output);
+        gpio_regs.pin_cnf.get(self.pin as usize).map(|pin| pin.modify(PinConfig::DIR::Output));
         hil::gpio::Configuration::Output
     }
 
@@ -413,8 +413,8 @@ impl hil::gpio::Configure for GPIOPin<'_> {
 
     fn make_input(&self) -> hil::gpio::Configuration {
         let gpio_regs = &*self.gpio_registers;
-        gpio_regs.pin_cnf[self.pin as usize]
-            .modify(PinConfig::DIR::Input + PinConfig::INPUT::Connect);
+        gpio_regs.pin_cnf.get(self.pin as usize).map(|pin| pin
+            .modify(PinConfig::DIR::Input + PinConfig::INPUT::Connect));
         hil::gpio::Configuration::Input
     }
 
@@ -427,8 +427,8 @@ impl hil::gpio::Configure for GPIOPin<'_> {
 
     fn configuration(&self) -> hil::gpio::Configuration {
         let gpio_regs = &*self.gpio_registers;
-        let dir = gpio_regs.pin_cnf[self.pin as usize].read_as_enum(PinConfig::DIR);
-        let connected = gpio_regs.pin_cnf[self.pin as usize].read_as_enum(PinConfig::INPUT);
+        let dir = gpio_regs.pin_cnf.get(self.pin as usize).map(|pin| pin.read_as_enum(PinConfig::DIR)).flatten();
+        let connected = gpio_regs.pin_cnf.get(self.pin as usize).map(|pin| pin.read_as_enum(PinConfig::INPUT)).flatten();
         match (dir, connected) {
             (Some(PinConfig::DIR::Value::Input), Some(PinConfig::INPUT::Value::Connect)) => {
                 hil::gpio::Configuration::Input
@@ -443,9 +443,9 @@ impl hil::gpio::Configure for GPIOPin<'_> {
 
     fn deactivate_to_low_power(&self) {
         let gpio_regs = &*self.gpio_registers;
-        gpio_regs.pin_cnf[self.pin as usize].write(
+        gpio_regs.pin_cnf.get(self.pin as usize).map(|pin| pin.write(
             PinConfig::DIR::Input + PinConfig::INPUT::Disconnect + PinConfig::PULL::Disabled,
-        );
+        ));
     }
 }
 
@@ -590,8 +590,9 @@ impl<'a, const N: usize> Port<'a, N> {
             if ev.matches_any(EventsIn::EVENT::Ready) {
                 ev.write(EventsIn::EVENT::NotReady);
                 // Get pin number for the event and `trigger` an interrupt manually on that pin
-                let pin = regs.config[i].read(Config::PSEL) as usize;
-                self.pins[pin].handle_interrupt();
+                if let Some(pin) = regs.config.get(i).map(|p| p.read(Config::PSEL) as usize) {
+                    self.pins.get(pin).map(|pin| pin.handle_interrupt());
+                }
             }
         }
     }

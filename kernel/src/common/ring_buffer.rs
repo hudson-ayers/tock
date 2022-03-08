@@ -58,7 +58,8 @@ impl<T: Copy> queue::Queue<T> for RingBuffer<'_, T> {
     }
 
     fn is_full(&self) -> bool {
-        self.head == ((self.tail + 1) % self.ring.len())
+        (self.tail + 1).checked_rem(self.ring.len()).map(|tail| self.head == tail)
+            .unwrap_or(true)
     }
 
     fn len(&self) -> usize {
@@ -78,7 +79,7 @@ impl<T: Copy> queue::Queue<T> for RingBuffer<'_, T> {
             false
         } else {
             self.ring.get_mut(self.tail).map(|tail| *tail = val);
-            self.tail = (self.tail + 1) % self.ring.len();
+            self.tail = (self.tail + 1).checked_rem(self.ring.len()).unwrap_or(0);
             true
         }
     }

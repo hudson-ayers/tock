@@ -160,20 +160,20 @@ impl Nvic {
     pub fn enable(&self) {
         let idx = self.0 as usize;
 
-        NVIC.iser[idx / 32].set(1 << (self.0 & 31));
+        NVIC.iser.get(idx / 32).map(|iser| iser.set(1 << (self.0 & 31)));
     }
 
     /// Disable the interrupt
     pub fn disable(&self) {
         let idx = self.0 as usize;
 
-        NVIC.icer[idx / 32].set(1 << (self.0 & 31));
+        NVIC.icer.get(idx / 32).map(|icer| icer.set(1 << (self.0 & 31)));
     }
 
     /// Clear pending state
     pub fn clear_pending(&self) {
         let idx = self.0 as usize;
 
-        NVIC.icpr[idx / 32].set(1 << (self.0 & 31));
+        NVIC.icpr.get(idx / 32).map(|icpr| icpr.set(1 << (self.0 & 31)));
     }
 }

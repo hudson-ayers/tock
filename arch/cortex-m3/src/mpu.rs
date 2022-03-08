@@ -390,6 +390,9 @@ impl kernel::mpu::MPU for MPU {
         permissions: mpu::Permissions,
         config: &mut Self::MpuConfig,
     ) -> Option<mpu::Region> {
+        // TODO(Hudson): My usage of checked_rem vs if guard is spotty here. Seems like checked_rem
+        //               leads to smaller size in general, but more risky correctness issues
+
         // Check that no previously allocated regions overlap the unallocated memory.
         for region in config.regions.iter() {
             if region.overlaps(unallocated_memory_start, unallocated_memory_size) {
@@ -450,11 +453,13 @@ impl kernel::mpu::MPU for MPU {
 
             // Finally, we calculate the region base by finding the nearest
             // address below `start` that aligns with the region size.
-            let underlying_region_start = start - (start % underlying_region_size);
+            let start_rem = start.checked_rem(underlying_region_size).unwrap_or(0);
+            let underlying_region_start = start - start_rem;
 
             // If `size` doesn't align to the subregion size, extend it.
-            if size % subregion_size != 0 {
-                size += subregion_size - (size % subregion_size);
+            let subregion_rem = size.checked_rem(subregion_size).unwrap_or(0);
+            if subregion_rem != 0 {
+                size += subregion_size - subregion_rem;
             }
 
             let end = start + size;
@@ -481,7 +486,8 @@ impl kernel::mpu::MPU for MPU {
                 // problem. Instead, we round up `size` to a power of two and
                 // shift `start` up in memory to make it align with `size`.
                 size = math::closest_power_of_two(size as u32) as usize;
-                start += size - (start % size);
+                let start_rem = start.checked_rem(size).unwrap_or(0);
+                start += size - start_rem;
 
                 region_start = start;
                 region_size = size;
@@ -503,10 +509,14 @@ impl kernel::mpu::MPU for MPU {
             permissions,
         );
 
-        config.regions[region_num] = region;
-        config.is_dirty.set(true);
+        if let Some(reg) = config.regions.get_mut(region_num) {
+            *reg = region;
+            config.is_dirty.set(true);
 
-        Some(mpu::Region::new(start as *const u8, size))
+            Some(mpu::Region::new(start as *const u8, size))
+        } else {
+            None
+        }
     }
 
     fn allocate_app_memory_region(
@@ -548,8 +558,9 @@ impl kernel::mpu::MPU for MPU {
         let mut region_start = unallocated_memory_start as usize;
 
         // If the start and length don't align, move region up until it does
-        if region_start % region_size != 0 {
-            region_start += region_size - (region_start % region_size);
+        let start_rem = region_start.checked_rem(region_size).unwrap_or(0);
+        if start_rem != 0 {
+            region_start += region_size - start_rem;
         }
 
         // We allocate an MPU region exactly over the process memory block, and we disable
@@ -564,6 +575,11 @@ impl kernel::mpu::MPU for MPU {
             if initial_kernel_memory_size == 0 {
                 8
             } else {
+                // TODO(Hudson): This should be impossible, but adding it elides divide by zero panics
+                // NOTE: putting this futher up doesn't work, perhaps because the *= 2 below
+                if region_size == 0 {
+                    return None;
+                }
                 initial_app_memory_size * 8 / region_size + 1
             }
         };
@@ -580,14 +596,19 @@ impl kernel::mpu::MPU for MPU {
         if subregions_end > kernel_memory_break {
             region_size *= 2;
 
-            if region_start % region_size != 0 {
-                region_start += region_size - (region_start % region_size);
+            let start_rem = region_start.checked_rem(region_size).unwrap_or(0);
+            if start_rem != 0 {
+                region_start += region_size - start_rem;
             }
 
             num_subregions_used = {
                 if initial_kernel_memory_size == 0 {
                     8
                 } else {
+                    // TODO(Hudson): This should be impossible, but adding it elides divide by zero panics
+                    if region_size == 0 {
+                        return None;
+                    }
                     initial_app_memory_size * 8 / region_size + 1
                 }
             };
@@ -610,10 +631,14 @@ impl kernel::mpu::MPU for MPU {
             permissions,
         );
 
-        config.regions[APP_MEMORY_REGION_NUM] = region;
-        config.is_dirty.set(true);
+        if let Some(reg) = config.regions.get_mut(APP_MEMORY_REGION_NUM) {
+            *reg = region;
+            config.is_dirty.set(true);
 
-        Some((region_start as *const u8, region_size))
+            Some((region_start as *const u8, region_size))
+        } else {
+            None
+        }
     }
 
     fn update_app_memory_region(

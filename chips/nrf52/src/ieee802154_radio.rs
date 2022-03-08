@@ -863,12 +863,14 @@ impl<'p> Radio<'p> {
                             "RX Buffer produced error when sending received packet to requestor",
                         );
 
-                        let frame_len = rbuf[MIMIC_PSDU_OFFSET as usize] as usize - radio::MFR_SIZE;
-                        // Length is: S0 (0 Byte) + Length (1 Byte) + S1 (0 Bytes) + Payload
-                        // And because the length field is directly read from the packet
-                        // We need to add 2 to length to get the total length
+                        if let Some(rbuf_size) = rbuf.get(MIMIC_PSDU_OFFSET as usize) {
+                            let frame_len = *rbuf_size as usize - radio::MFR_SIZE;
+                            // Length is: S0 (0 Byte) + Length (1 Byte) + S1 (0 Bytes) + Payload
+                            // And because the length field is directly read from the packet
+                            // We need to add 2 to length to get the total length
 
-                        client.receive(rbuf, frame_len, regs.crcstatus.get() == 1, result)
+                            client.receive(rbuf, frame_len, regs.crcstatus.get() == 1, result)
+                        }
                     });
                 }
                 // Radio state - Disabled

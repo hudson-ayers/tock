@@ -32,11 +32,19 @@ impl Pinmux {
         let port: usize = (pin as usize) / PIN_PER_PORT;
         let pin_idx: usize = (pin as usize) % PIN_PER_PORT;
         let used_pins = USED_PINS[port].get();
-        if used_pins & (1 << pin_idx) != 0 {
-            panic!("Pin {} is already in use!", pin);
+        // TODO(Hudson): Removing these panics seems bad. Not sure if you want me to replace with
+        //               Option/Result or not, or if we don't care
+        if let Some(used_pins) = USED_PINS.get(port).map(|p| p.get()) {
+            if used_pins & (1 << pin_idx) != 0 {
+                // TODO: really should return a result
+                Pinmux(0)
+                /*panic!("Pin {} is already in use!", pin);*/
+            } else {
+                USED_PINS.get(port).map(|p| p.set(used_pins | 1 << pin_idx));
+                Pinmux(pin)
+            }
         } else {
-            USED_PINS[port].set(used_pins | 1 << pin_idx);
-            Pinmux(pin)
+            Pinmux(0)
         }
     }
 }
