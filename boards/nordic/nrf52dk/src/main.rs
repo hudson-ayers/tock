@@ -66,10 +66,13 @@
 #![cfg_attr(not(doc), no_main)]
 #![feature(const_in_array_repeat_expressions)]
 
+use capsules::rng;
 use capsules::virtual_alarm::VirtualMuxAlarm;
 use capsules::virtual_uart::{MuxUart, UartDevice};
 use kernel::common::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferredCallClientState};
 use kernel::component::Component;
+use kernel::hil::entropy::Entropy32;
+use kernel::hil::rng::Rng;
 #[allow(unused_imports)]
 use kernel::{capabilities, create_capability, debug, debug_gpio, debug_verbose, static_init};
 use nrf52832::gpio::Pin;
@@ -142,7 +145,10 @@ pub struct Platform {
     >,
     gpio: &'static capsules::gpio::GPIO<'static, nrf52832::gpio::GPIOPin<'static>>,
     led: &'static capsules::led::LED<'static, nrf52832::gpio::GPIOPin<'static>>,
-    rng: &'static capsules::rng::RngDriver<'static>,
+    rng: &'static rng::RngDriver<
+        'static,
+        rng::Entropy32ToRandom<'static, nrf52832::trng::Trng<'static>>,
+    >,
     temp: &'static capsules::temperature::TemperatureSensor<'static>,
     ipc: kernel::ipc::IPC,
     analog_comparator: &'static capsules::analog_comparator::AnalogComparator<
@@ -453,7 +459,18 @@ pub unsafe fn reset_handler() {
         components::temperature::TemperatureComponent::new(board_kernel, &base_peripherals.temp)
             .finalize(());
 
-    let rng = components::rng::RngComponent::new(board_kernel, &base_peripherals.trng).finalize(());
+    //let rng = components::rng::RngComponent::new(board_kernel, &base_peripherals.trng).finalize(());
+
+    let entropy_to_random = static_init!(
+        rng::Entropy32ToRandom<'static, nrf52832::trng::Trng<'static>>,
+        rng::Entropy32ToRandom::new(&base_peripherals.trng)
+    );
+    let rng = static_init!(
+        rng::RngDriver<'static, rng::Entropy32ToRandom<'static, nrf52832::trng::Trng<'static>>>,
+        rng::RngDriver::new(entropy_to_random, board_kernel.create_grant(&grant_cap))
+    );
+    &base_peripherals.trng.set_client(entropy_to_random);
+    entropy_to_random.set_client(rng);
 
     // Initialize AC using AIN5 (P0.29) as VIN+ and VIN- as AIN0 (P0.02)
     // These are hardcoded pin assignments specified in the driver

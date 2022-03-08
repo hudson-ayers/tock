@@ -39,15 +39,15 @@ pub struct App {
     idx: usize,
 }
 
-pub struct RngDriver<'a> {
-    rng: &'a dyn Rng<'a>,
+pub struct RngDriver<'a, R: Rng<'a> + 'a> {
+    rng: &'a R,
     apps: Grant<App>,
     getting_randomness: Cell<bool>,
 }
 
-impl<'a> RngDriver<'a> {
-    pub fn new(rng: &'a dyn Rng<'a>, grant: Grant<App>) -> RngDriver<'a> {
-        RngDriver {
+impl<'a, R: Rng<'a> + 'a> RngDriver<'a, R> {
+    pub fn new(rng: &'a R, grant: Grant<App>) -> Self {
+        Self {
             rng: rng,
             apps: grant,
             getting_randomness: Cell::new(false),
@@ -55,7 +55,7 @@ impl<'a> RngDriver<'a> {
     }
 }
 
-impl rng::Client for RngDriver<'_> {
+impl<'a, R: Rng<'a> + 'a> rng::Client for RngDriver<'a, R> {
     fn randomness_available(
         &self,
         randomness: &mut dyn Iterator<Item = u32>,
@@ -133,7 +133,7 @@ impl rng::Client for RngDriver<'_> {
     }
 }
 
-impl<'a> Driver for RngDriver<'a> {
+impl<'a, R: Rng<'a> + 'a> Driver for RngDriver<'a, R> {
     fn allow(
         &self,
         appid: AppId,
@@ -204,21 +204,21 @@ impl<'a> Driver for RngDriver<'a> {
     }
 }
 
-pub struct Entropy32ToRandom<'a> {
-    egen: &'a dyn Entropy32<'a>,
+pub struct Entropy32ToRandom<'a, E: Entropy32<'a> + 'a> {
+    egen: &'a E,
     client: OptionalCell<&'a dyn rng::Client>,
 }
 
-impl<'a> Entropy32ToRandom<'a> {
-    pub fn new(egen: &'a dyn Entropy32<'a>) -> Entropy32ToRandom<'a> {
-        Entropy32ToRandom {
+impl<'a, E: Entropy32<'a> + 'a> Entropy32ToRandom<'a, E> {
+    pub fn new(egen: &'a E) -> Self {
+        Self {
             egen: egen,
             client: OptionalCell::empty(),
         }
     }
 }
 
-impl<'a> Rng<'a> for Entropy32ToRandom<'a> {
+impl<'a, E: Entropy32<'a> + 'a> Rng<'a> for Entropy32ToRandom<'a, E> {
     fn get(&self) -> ReturnCode {
         self.egen.get()
     }
@@ -233,7 +233,7 @@ impl<'a> Rng<'a> for Entropy32ToRandom<'a> {
     }
 }
 
-impl entropy::Client32 for Entropy32ToRandom<'_> {
+impl<'a, E: Entropy32<'a> + 'a> entropy::Client32 for Entropy32ToRandom<'a, E> {
     fn entropy_available(
         &self,
         entropy: &mut dyn Iterator<Item = u32>,

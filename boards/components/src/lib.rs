@@ -23,7 +23,6 @@ pub mod ninedof;
 pub mod nonvolatile_storage;
 pub mod nrf51822;
 pub mod panic_button;
-pub mod rng;
 pub mod sched;
 pub mod screen;
 pub mod segger_rtt;
