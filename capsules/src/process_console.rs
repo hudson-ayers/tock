@@ -264,14 +264,14 @@ impl<'a, C: ProcessManagementCapability> ProcessConsole<'a, C> {
                                     let (grants_used, grants_total) = info.number_app_grant_uses(appid, &self.capability);
 
                                     debug!(
-                                        "  {:?}\t{:<20}{:6}{:10}{:19}{:10}  {:?}{:5}/{}",
+                                        "  {:?}\t{:<20}{:6}{:10}{:19}{:10}  {}{:5}/{}",
                                         appid.id(),
                                         pname,
                                         proc.debug_timeslice_expiration_count(),
                                         proc.debug_syscall_count(),
                                         proc.debug_dropped_callback_count(),
                                         proc.get_restart_count(),
-                                        proc.get_state(),
+                                        proc.get_state().to_string(),
                                         grants_used,
                                         grants_total
                                     );

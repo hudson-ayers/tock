@@ -592,7 +592,7 @@ impl From<Error> for ReturnCode {
 ///
 /// This is made public in case external implementations of `ProcessType` want
 /// to re-use these process states in the external implementation.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub enum State {
     /// Process expects to be running code. The process may not be currently
     /// scheduled by the scheduler, but the process has work to do if it is
@@ -630,6 +630,21 @@ pub enum State {
     /// processes yet. It can also happen if an process is terminated and all
     /// of its state is reset as if it has not been executed yet.
     Unstarted,
+}
+
+impl State {
+    pub fn to_string(&self) -> &str {
+        use State::*;
+        match self {
+            Running => "Running",
+            Yielded => "Yielded",
+            StoppedRunning => "StoppedRunning",
+            StoppedYielded => "StoppedYielded",
+            StoppedFaulted => "StoppedFaulted",
+            Fault => "Fault",
+            Unstarted => "Unstarted",
+        }
+    }
 }
 
 /// The reaction the kernel should take when an app encounters a fault.
@@ -1380,11 +1395,11 @@ impl<C: Chip> ProcessType for Process<'_, C> {
 
         let _ = writer.write_fmt(format_args!(
             "\
-             App: {}   -   [{:?}]\
+             App: {}   -   [{}]\
              \r\n Events Queued: {}   Syscall Count: {}   Dropped Callback Count: {}\
              \n Restart Count: {}\n",
             self.process_name,
-            self.state.get(),
+            self.state.get().to_string(),
             events_queued,
             syscall_count,
             dropped_callback_count,
