@@ -67,6 +67,7 @@
 #![feature(const_in_array_repeat_expressions)]
 
 use capsules::rng;
+use capsules::temperature::TemperatureSensor;
 use capsules::virtual_alarm::VirtualMuxAlarm;
 use capsules::virtual_uart::{MuxUart, UartDevice};
 use kernel::common::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferredCallClientState};
@@ -149,7 +150,7 @@ pub struct Platform {
         'static,
         rng::Entropy32ToRandom<'static, nrf52832::trng::Trng<'static>>,
     >,
-    temp: &'static capsules::temperature::TemperatureSensor<'static>,
+    temp: &'static TemperatureSensor<'static, nrf52832::temperature::Temp<'static>>,
     ipc: kernel::ipc::IPC,
     analog_comparator: &'static capsules::analog_comparator::AnalogComparator<
         'static,
@@ -455,9 +456,18 @@ pub unsafe fn reset_handler() {
         nrf52_components::BLEComponent::new(board_kernel, &base_peripherals.ble_radio, mux_alarm)
             .finalize(());
 
-    let temp =
-        components::temperature::TemperatureComponent::new(board_kernel, &base_peripherals.temp)
-            .finalize(());
+    /*let temp =
+    components::temperature::TemperatureComponent::new(board_kernel, &base_peripherals.temp)
+        .finalize(());*/
+    let temp = static_init!(
+        TemperatureSensor<'static, nrf52832::temperature::Temp<'static>>,
+        TemperatureSensor::new(
+            &base_peripherals.temp,
+            board_kernel.create_grant(&grant_cap)
+        )
+    );
+
+    hil::sensors::TemperatureDriver::set_client(&base_peripherals.temp, temp);
 
     //let rng = components::rng::RngComponent::new(board_kernel, &base_peripherals.trng).finalize(());
 
