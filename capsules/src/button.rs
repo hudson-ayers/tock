@@ -98,8 +98,11 @@ impl<'a, P: gpio::InterruptPin<'a>> Button<'a, P> {
     }
 
     fn get_button_state(&self, pin_num: u32) -> gpio::ActivationState {
-        let pin = &self.pins[pin_num as usize];
-        pin.0.read_activation(pin.1)
+        if let Some(pin) = self.pins.get(pin_num as usize) {
+            pin.0.read_activation(pin.1)
+        } else {
+            gpio::ActivationState::Inactive
+        }
     }
 }
 
@@ -244,7 +247,9 @@ impl<'a, P: gpio::InterruptPin<'a>> gpio::ClientWithValue for Button<'a, P> {
         // (and didn't unregister the interrupt). Lazily disable interrupts for
         // this button if so.
         if interrupt_count.get() == 0 {
-            self.pins[pin_num as usize].0.disable_interrupts();
+            if let Some(pin) = self.pins.get(pin_num as usize) {
+                pin.0.disable_interrupts()
+            }
         }
     }
 }

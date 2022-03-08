@@ -132,7 +132,7 @@ impl<'a, IP: gpio::InterruptPin<'a>> gpio::ClientWithValue for GPIO<'a, IP> {
     fn fired(&self, pin_num: u32) {
         // read the value of the pin
         let pins = self.pins.as_ref();
-        if let Some(pin) = pins[pin_num as usize] {
+        if let Some(pin) = pins.get(pin_num as usize).cloned().flatten() {
             let pin_state = pin.read();
 
             // schedule callback with the pin number and value

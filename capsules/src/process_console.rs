@@ -299,7 +299,7 @@ impl<'a, C: ProcessManagementCapability> ProcessConsole<'a, C> {
             }
         });
         self.command_buffer.map(|command| {
-            command[0] = 0;
+            command.get_mut(0).map(|cmd| { *cmd = 0; });
         });
         self.command_index.set(0);
     }
@@ -360,24 +360,26 @@ impl<'a, C: ProcessManagementCapability> uart::ReceiveClient for ProcessConsole<
                 1 => {
                     self.command_buffer.map(|command| {
                         let index = self.command_index.get() as usize;
-                        if read_buf[0] == ('\n' as u8) || read_buf[0] == ('\r' as u8) {
-                            self.execute.set(true);
-                            self.write_bytes(&['\r' as u8, '\n' as u8]);
-                        } else if read_buf[0] == ('\x08' as u8) && index > 0 {
-                            // Backspace, echo and remove last byte
-                            // Note echo is '\b \b' to erase
-                            self.write_bytes(&['\x08' as u8, ' ' as u8, '\x08' as u8]);
-                            command[index - 1] = '\0' as u8;
-                            self.command_index.set(index - 1);
-                        } else if index < (command.len() - 1) && read_buf[0] < 128 {
-                            // For some reason, sometimes reads return > 127 but no error,
-                            // which causes utf-8 decoding failure, so check byte is < 128. -pal
+                        if let Some(byte) = read_buf.get(0).copied() {
+                            if byte == ('\n' as u8) || byte == ('\r' as u8) {
+                                self.execute.set(true);
+                                self.write_bytes(&['\r' as u8, '\n' as u8]);
+                            } else if byte == ('\x08' as u8) && index > 0 {
+                                // Backspace, echo and remove last byte
+                                // Note echo is '\b \b' to erase
+                                self.write_bytes(&['\x08' as u8, ' ' as u8, '\x08' as u8]);
+                                command.get_mut(index - 1).map(|cmd| { *cmd = '\0' as u8; });
+                                self.command_index.set(index - 1);
+                            } else if index < (command.len() - 1) && byte < 128 {
+                                // For some reason, sometimes reads return > 127 but no error,
+                                // which causes utf-8 decoding failure, so check byte is < 128. -pal
 
-                            // Echo the byte and store it
-                            self.write_byte(read_buf[0]);
-                            command[index] = read_buf[0];
-                            self.command_index.set(index + 1);
-                            command[index + 1] = 0;
+                                // Echo the byte and store it
+                                self.write_byte(byte);
+                                command.get_mut(index).map(|cmd| { *cmd = byte });
+                                self.command_index.set(index + 1);
+                                command.get_mut(index + 1).map(|cmd| { *cmd = 0 });
+                            }
                         }
                     });
                 }

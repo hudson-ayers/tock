@@ -114,7 +114,11 @@ impl<'a> uart::ReceiveClient for MuxUart<'a> {
                     {
                         // debug!("Have {} bytes, copying in bytes {}-{}, {} remain", rx_len, position, position + len, remaining);
                         for i in 0..len {
-                            rxbuf[position + i] = buffer[i];
+                            if let Some(b) = buffer.get(i) {
+                                rxbuf.get_mut(position + i).map(|rx| *rx = *b);
+                            } else {
+                                break;
+                            }
                         }
                     }
                     device.rx_position.set(position + len);
@@ -228,7 +232,9 @@ impl<'a> MuxUart<'a> {
                             if rcode != ReturnCode::SUCCESS {
                                 node.tx_client.map(|client| {
                                     node.transmitting.set(false);
-                                    client.transmitted_buffer(rbuf.unwrap(), 0, rcode);
+                                    if let Some(buf) = rbuf {
+                                        client.transmitted_buffer(buf, 0, rcode);
+                                    }
                                 });
                             }
                         }
