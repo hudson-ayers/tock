@@ -77,7 +77,7 @@ impl<T: Copy> queue::Queue<T> for RingBuffer<'_, T> {
             // Incrementing tail will overwrite head
             false
         } else {
-            self.ring[self.tail] = val;
+            self.ring.get_mut(self.tail).map(|tail| *tail = val);
             self.tail = (self.tail + 1) % self.ring.len();
             true
         }
@@ -85,9 +85,12 @@ impl<T: Copy> queue::Queue<T> for RingBuffer<'_, T> {
 
     fn push(&mut self, val: T) -> Option<T> {
         let result = if self.is_full() {
-            let val = self.ring[self.head];
-            self.head = (self.head + 1) % self.ring.len();
-            Some(val)
+            if let Some(val) = self.ring.get(self.head) {
+                self.head = (self.head + 1) % self.ring.len();
+                Some(*val)
+            } else {
+                None
+            }
         } else {
             None
         };
@@ -99,9 +102,12 @@ impl<T: Copy> queue::Queue<T> for RingBuffer<'_, T> {
 
     fn dequeue(&mut self) -> Option<T> {
         if self.has_elements() {
-            let val = self.ring[self.head];
-            self.head = (self.head + 1) % self.ring.len();
-            Some(val)
+            if let Some(val) = self.ring.get(self.head) {
+                self.head = (self.head + 1) % self.ring.len();
+                Some(*val)
+            } else {
+                None
+            }
         } else {
             None
         }

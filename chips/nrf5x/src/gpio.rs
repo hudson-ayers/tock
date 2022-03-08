@@ -501,8 +501,10 @@ impl<'a> hil::gpio::Interrupt<'a> for GPIOPin<'a> {
             };
             let regs = &*self.gpiote_registers;
             let pin: u32 = (GPIO_PER_PORT as u32 * self.port as u32) + self.pin as u32;
-            regs.config[channel].write(Config::MODE::Event + Config::PSEL.val(pin) + polarity);
-            regs.intenset.set(1 << channel);
+            if let Some(ch) = regs.config.get(channel) {
+                ch.write(Config::MODE::Event + Config::PSEL.val(pin) + polarity);
+                regs.intenset.set(1 << channel);
+            }
         } else {
             debug!("No available GPIOTE interrupt channels");
         }
@@ -511,9 +513,10 @@ impl<'a> hil::gpio::Interrupt<'a> for GPIOPin<'a> {
     fn disable_interrupts(&self) {
         if let Ok(channel) = self.find_channel(self.pin) {
             let regs = &*self.gpiote_registers;
-            regs.config[channel]
-                .write(Config::MODE::CLEAR + Config::PSEL::CLEAR + Config::POLARITY::CLEAR);
-            regs.intenclr.set(1 << channel);
+            if let Some(ch) = regs.config.get(channel) {
+                ch.write(Config::MODE::CLEAR + Config::PSEL::CLEAR + Config::POLARITY::CLEAR);
+                regs.intenclr.set(1 << channel);
+            }
         }
     }
 }
