@@ -73,11 +73,11 @@ impl PartialEq for AppId {
 
 impl Eq for AppId {}
 
-impl fmt::Debug for AppId {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.identifier)
-    }
-}
+//impl fmt::Debug for AppId {
+//    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//        write!(f, "{}", self.identifier)
+//    }
+//}
 
 impl AppId {
     /// Create a new `AppId` object based on the app identifier and its index
@@ -211,18 +211,7 @@ impl Callback {
                 }))
             });
         if config::CONFIG.trace_syscalls {
-            debug!(
-                "[{:?}] schedule[{:#x}:{}] @{:#x}({:#x}, {:#x}, {:#x}, {:#x}) = {}",
-                self.app_id,
-                self.callback_id.driver_num,
-                self.callback_id.subscribe_num,
-                self.fn_ptr.as_ptr() as usize,
-                r0,
-                r1,
-                r2,
-                self.appdata,
-                res
-            );
+            // we don't have this enabled, delete to simplify compilation
         }
         res
     }

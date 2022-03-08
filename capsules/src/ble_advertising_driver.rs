@@ -392,7 +392,7 @@ where
                         // operation at the appropriate time. Instead, reschedule the
                         // operation for later. This is _kind_ of simulating actual
                         // on-air interference
-                        debug!("BLE: operation delayed for app {:?}", app.appid());
+                        debug!("BLE: operation delayed for app {:?}", app.appid().id());
                         app.set_next_alarm::<A::Frequency>(self.alarm.now());
                         return;
                     }
@@ -419,7 +419,7 @@ where
                         }
                         _ => debug!(
                             "app: {:?} \t invalid state {:?}",
-                            app.appid(),
+                            app.appid().id(),
                             app.process_status
                         ),
                     }

@@ -903,13 +903,6 @@ impl<C: Chip> ProcessType for Process<'_, C> {
             });
             if config::CONFIG.trace_syscalls {
                 let count_after = tasks.len();
-                debug!(
-                    "[{:?}] remove_pending_callbacks[{:#x}:{}] = {} callback(s) removed",
-                    self.appid(),
-                    callback_id.driver_num,
-                    callback_id.subscribe_num,
-                    count_before - count_after,
-                );
             }
         });
     }

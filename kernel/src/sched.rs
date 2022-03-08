@@ -645,22 +645,11 @@ impl Kernel {
                             match syscall {
                                 Syscall::MEMOP { operand, arg0 } => {
                                     let res = memop::memop(process, operand, arg0);
-                                    if config::CONFIG.trace_syscalls {
-                                        debug!(
-                                            "[{:?}] memop({}, {:#x}) = {:#x} = {:?}",
-                                            process.appid(),
-                                            operand,
-                                            arg0,
-                                            usize::from(res),
-                                            res
-                                        );
-                                    }
+                                    if config::CONFIG.trace_syscalls {}
                                     process.set_syscall_return_value(res.into());
                                 }
                                 Syscall::YIELD => {
-                                    if config::CONFIG.trace_syscalls {
-                                        debug!("[{:?}] yield", process.appid());
-                                    }
+                                    if config::CONFIG.trace_syscalls {}
                                     process.set_yielded_state();
 
                                     // There might be already enqueued callbacks
@@ -707,18 +696,7 @@ impl Kernel {
                                                 None => ReturnCode::ENODEVICE,
                                             },
                                         );
-                                    if config::CONFIG.trace_syscalls {
-                                        debug!(
-                                            "[{:?}] subscribe({:#x}, {}, @{:#x}, {:#x}) = {:#x} = {:?}",
-                                            process.appid(),
-                                            driver_number,
-                                            subdriver_number,
-                                            callback_ptr as usize,
-                                            appdata,
-                                            usize::from(res),
-                                            res
-                                        );
-                                    }
+                                    if config::CONFIG.trace_syscalls {}
                                     process.set_syscall_return_value(res.into());
                                 }
                                 Syscall::COMMAND {
@@ -740,18 +718,7 @@ impl Kernel {
                                                 None => ReturnCode::ENODEVICE,
                                             },
                                         );
-                                    if config::CONFIG.trace_syscalls {
-                                        debug!(
-                                            "[{:?}] cmd({:#x}, {}, {:#x}, {:#x}) = {:#x} = {:?}",
-                                            process.appid(),
-                                            driver_number,
-                                            subdriver_number,
-                                            arg0,
-                                            arg1,
-                                            usize::from(res),
-                                            res
-                                        );
-                                    }
+                                    if config::CONFIG.trace_syscalls {}
                                     process.set_syscall_return_value(res.into());
                                 }
                                 Syscall::ALLOW {
@@ -775,18 +742,7 @@ impl Kernel {
                                             None => ReturnCode::ENODEVICE,
                                         }
                                     });
-                                    if config::CONFIG.trace_syscalls {
-                                        debug!(
-                                            "[{:?}] allow({:#x}, {}, @{:#x}, {:#x}) = {:#x} = {:?}",
-                                            process.appid(),
-                                            driver_number,
-                                            subdriver_number,
-                                            allow_address as usize,
-                                            allow_size,
-                                            usize::from(res),
-                                            res
-                                        );
-                                    }
+                                    if config::CONFIG.trace_syscalls {}
                                     process.set_syscall_return_value(res.into());
                                 }
                             }
@@ -820,17 +776,7 @@ impl Kernel {
                         None => break,
                         Some(cb) => match cb {
                             Task::FunctionCall(ccb) => {
-                                if config::CONFIG.trace_syscalls {
-                                    debug!(
-                                        "[{:?}] function_call @{:#x}({:#x}, {:#x}, {:#x}, {:#x})",
-                                        process.appid(),
-                                        ccb.pc,
-                                        ccb.argument0,
-                                        ccb.argument1,
-                                        ccb.argument2,
-                                        ccb.argument3,
-                                    );
-                                }
+                                if config::CONFIG.trace_syscalls {}
                                 process.set_process_function(ccb);
                             }
                             Task::IPC((otherapp, ipc_type)) => {

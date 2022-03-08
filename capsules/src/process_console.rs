@@ -265,7 +265,7 @@ impl<'a, C: ProcessManagementCapability> ProcessConsole<'a, C> {
 
                                     debug!(
                                         "  {:?}\t{:<20}{:6}{:10}{:19}{:10}  {:?}{:5}/{}",
-                                        appid,
+                                        appid.id(),
                                         pname,
                                         proc.debug_timeslice_expiration_count(),
                                         proc.debug_syscall_count(),
