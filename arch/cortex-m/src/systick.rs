@@ -197,6 +197,6 @@ impl kernel::SchedulerTimer for SysTick {
         // use u64 in case of overflow when multiplying by 1,000,000
         let tics = SYSTICK_BASE.syst_cvr.read(CurrentValue::CURRENT) as u64;
         let hertz = self.hertz() as u64;
-        ((tics * 1_000_000) / hertz) as u32
+        ((tics * 1_000_000).checked_div(hertz).unwrap_or(0)) as u32
     }
 }

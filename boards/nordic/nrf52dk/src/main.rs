@@ -354,11 +354,15 @@ pub unsafe fn reset_handler() {
             dynamic_deferred_caller,
         )
     );
-    uart_mux.initialize_callback_handle(
-        dynamic_deferred_caller
-            .register(uart_mux)
-            .expect("no deferred call slot available for uart mux"),
-    );
+    if let Some(uart_ddc) = dynamic_deferred_caller
+            .register(uart_mux) {
+        uart_mux.initialize_callback_handle(
+            uart_ddc
+        );
+    } else {
+        // TODO(Hudson): Unsure if safe to return from main...just looping instead
+        loop {}
+    }
 
     uart_mux.initialize();
     hil::uart::Transmit::set_transmit_client(channel, uart_mux);

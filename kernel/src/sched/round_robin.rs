@@ -100,7 +100,7 @@ impl<'a, C: Chip> Scheduler<C> for RoundRobinSched<'a> {
     }
 
     fn result(&self, result: StoppedExecutingReason, execution_time_us: Option<u32>) {
-        let execution_time_us = execution_time_us.unwrap(); // should never fail
+        let execution_time_us = execution_time_us.unwrap_or(0); // should never fail
         let reschedule = match result {
             StoppedExecutingReason::KernelPreemption => {
                 if self.time_remaining.get() > execution_time_us {
@@ -115,7 +115,9 @@ impl<'a, C: Chip> Scheduler<C> for RoundRobinSched<'a> {
         };
         self.last_rescheduled.set(reschedule);
         if !reschedule {
-            self.processes.push_tail(self.processes.pop_head().unwrap());
+            if let Some(process) = self.processes.pop_head() {
+                self.processes.push_tail(process);
+            }
         }
     }
 }

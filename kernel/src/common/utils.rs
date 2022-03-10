@@ -213,3 +213,19 @@ macro_rules! count_expressions {
     ($head:expr) => (1usize);
     ($head:expr, $($tail:expr),*) => (1usize + count_expressions!($($tail),*));
 }
+
+/// Helper that mimics copy from slice, but will fail and return False if the slices are not
+/// the same length instead of panicking
+pub fn copy_from_slice_fallible<T>(src: &mut [T], dst: &[T]) -> bool
+        where T: Copy {
+
+    if src.len() != dst.len() {
+        return false;
+    }
+
+    let mut i = 0;
+    while let (Some(src_item), Some(dst_item)) = (src.get_mut(i), dst.get(i)) {
+        *src_item = *dst_item;
+    }
+    return true;
+}

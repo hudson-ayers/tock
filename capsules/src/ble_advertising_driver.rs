@@ -244,30 +244,42 @@ impl App {
         self.adv_data.as_ref().map_or(ReturnCode::FAIL, |adv_data| {
             ble.kernel_tx.take().map_or(ReturnCode::FAIL, |kernel_tx| {
                 let adv_data_len = cmp::min(kernel_tx.len() - PACKET_ADDR_LEN - 2, adv_data.len());
-                let adv_data_corrected = &adv_data.as_ref()[..adv_data_len];
-                let payload_len = adv_data_corrected.len() + PACKET_ADDR_LEN;
-                {
-                    let (header, payload) = kernel_tx.split_at_mut(2);
-                    header[0] = self.pdu_type;
-                    match self.pdu_type {
-                        ADV_IND | ADV_NONCONN_IND | ADV_SCAN_IND => {
-                            // Set TxAdd because AdvA field is going to be a "random"
-                            // address
-                            header[0] |= 1 << ADV_HEADER_TXADD_OFFSET;
+                if let Some(adv_data_corrected) = adv_data.as_ref().get(..adv_data_len) {
+                    let payload_len = adv_data_corrected.len() + PACKET_ADDR_LEN;
+                    {
+                        let (header, payload) = kernel_tx.split_at_mut(2);
+                        // This will never fail
+                        header.get_mut(0).map(|h| *h = self.pdu_type);
+                        match self.pdu_type {
+                            ADV_IND | ADV_NONCONN_IND | ADV_SCAN_IND => {
+                                // Set TxAdd because AdvA field is going to be a "random"
+                                // address
+                                // This will never fail
+                                header.get_mut(0).map(|h| *h |= 1 << ADV_HEADER_TXADD_OFFSET);
+                            }
+                            _ => {}
                         }
-                        _ => {}
-                    }
-                    // The LENGTH field is 6-bits wide, so make sure to truncate it
-                    header[1] = (payload_len & 0x3f) as u8;
+                        // The LENGTH field is 6-bits wide, so make sure to truncate it
+                        // This will never fail
+                        header.get_mut(1).map(|h| *h = (payload_len & 0x3f) as u8);
 
-                    let (adva, data) = payload.split_at_mut(6);
-                    adva.copy_from_slice(&self.address);
-                    data[..adv_data_len].copy_from_slice(adv_data_corrected);
+                        let (adva, data) = payload.split_at_mut(6);
+                        if !kernel::common::utils::copy_from_slice_fallible(adva, &self.address) {
+                            return ReturnCode::FAIL;
+                        }
+                        if let Some(data_mut) = data.get_mut(..adv_data_len) {
+                            if !kernel::common::utils::copy_from_slice_fallible(data_mut, adv_data_corrected) {
+                                return ReturnCode::FAIL;
+                            }
+                        }
+                    }
+                    let total_len = cmp::min(PACKET_LENGTH, payload_len + 2);
+                    ble.radio
+                        .transmit_advertisement(kernel_tx, total_len, channel);
+                    ReturnCode::SUCCESS
+                } else {
+                    ReturnCode::FAIL
                 }
-                let total_len = cmp::min(PACKET_LENGTH, payload_len + 2);
-                ble.radio
-                    .transmit_advertisement(kernel_tx, total_len, channel);
-                ReturnCode::SUCCESS
             })
         })
     }

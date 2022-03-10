@@ -714,18 +714,17 @@ impl<'p> Radio<'p> {
         regs.event_ready.write(Event::READY::CLEAR);
 
         if self.transmitting.get() {
-            let tbuf = self
-                .tx_buf
-                .take()
-                .expect("Radio TX Buffer produced an invalid result when setting the DMA pointer.");
-
-            self.tx_buf.replace(self.set_dma_ptr(tbuf));
+            if let Some(tbuf) =  self.tx_buf.take() {
+                self.tx_buf.replace(self.set_dma_ptr(tbuf));
+            } else {
+                return;
+            }
         } else {
-            let rbuf = self
-                .rx_buf
-                .take()
-                .expect("Radio RX Buffer produced an invalid result when setting the DMA pointer.");
-            self.rx_buf.replace(self.set_dma_ptr(rbuf));
+            if let Some(rbuf) = self.rx_buf.take() {
+                self.rx_buf.replace(self.set_dma_ptr(rbuf));
+            } else {
+                return;
+            }
         }
 
         regs.task_rxen.write(Task::ENABLE::SET);
@@ -818,8 +817,9 @@ impl<'p> Radio<'p> {
                 //TODO: Acked is flagged as false until I get around to fixing it.
                 self.tx_client
                     .map(|client| {
-                        let tbuf = self.tx_buf.take().expect("TX Buffer produced error when sending it back to the requestor after the channel was busy.");
-                        client.send_done(tbuf, false, result)
+                        if let Some(tbuf) = self.tx_buf.take() {
+                            client.send_done(tbuf, false, result);
+                        }
                     });
             }
 
@@ -849,9 +849,9 @@ impl<'p> Radio<'p> {
                     //TODO: Acked is flagged as false until I get around to fixing it.
                     self.tx_client
                         .map(|client|{
-                        let tbuf = self.tx_buf.take().expect("TX Buffer produced error when sending it back to the requestor after successful transmission.");
-
-                         client.send_done(tbuf, false, result)
+                            if let Some(tbuf) = self.tx_buf.take() {
+                                client.send_done(tbuf, false, result);
+                            }
                     });
                 }
                 nrf5x::constants::RADIO_STATE_RXRU
@@ -859,17 +859,15 @@ impl<'p> Radio<'p> {
                 | nrf5x::constants::RADIO_STATE_RXDISABLE
                 | nrf5x::constants::RADIO_STATE_RX => {
                     self.rx_client.map(|client| {
-                        let rbuf = self.rx_buf.take().expect(
-                            "RX Buffer produced error when sending received packet to requestor",
-                        );
+                        if let Some(rbuf) = self.rx_buf.take() {
+                            if let Some(rbuf_size) = rbuf.get(MIMIC_PSDU_OFFSET as usize) {
+                                let frame_len = *rbuf_size as usize - radio::MFR_SIZE;
+                                // Length is: S0 (0 Byte) + Length (1 Byte) + S1 (0 Bytes) + Payload
+                                // And because the length field is directly read from the packet
+                                // We need to add 2 to length to get the total length
 
-                        if let Some(rbuf_size) = rbuf.get(MIMIC_PSDU_OFFSET as usize) {
-                            let frame_len = *rbuf_size as usize - radio::MFR_SIZE;
-                            // Length is: S0 (0 Byte) + Length (1 Byte) + S1 (0 Bytes) + Payload
-                            // And because the length field is directly read from the packet
-                            // We need to add 2 to length to get the total length
-
-                            client.receive(rbuf, frame_len, regs.crcstatus.get() == 1, result)
+                                client.receive(rbuf, frame_len, regs.crcstatus.get() == 1, result)
+                            }
                         }
                     });
                 }

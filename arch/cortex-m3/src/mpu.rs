@@ -648,7 +648,7 @@ impl kernel::mpu::MPU for MPU {
         permissions: mpu::Permissions,
         config: &mut Self::MpuConfig,
     ) -> Result<(), ()> {
-        let (region_start, region_size) = match config.regions[APP_MEMORY_REGION_NUM].location() {
+        let (region_start, region_size) = match config.regions.get(APP_MEMORY_REGION_NUM).map(|r| r.location()).flatten() {
             Some((start, size)) => (start as usize, size),
             None => {
                 // Error: Process tried to update app memory MPU region before it was created.
@@ -672,6 +672,10 @@ impl kernel::mpu::MPU for MPU {
             if kernel_memory_size == 0 {
                 8
             } else {
+               // TODO(Hudson): This should be impossible, but adding it elides divide by zero panics
+               if region_size == 0 {
+                   return Err(());
+               }
                 app_memory_size * 8 / region_size + 1
             }
         };
@@ -695,10 +699,14 @@ impl kernel::mpu::MPU for MPU {
             permissions,
         );
 
-        config.regions[APP_MEMORY_REGION_NUM] = region;
-        config.is_dirty.set(true);
+        if let Some(reg) = config.regions.get_mut(APP_MEMORY_REGION_NUM) {
+            *reg = region;
+            config.is_dirty.set(true);
 
-        Ok(())
+            Ok(())
+        } else {
+            Err(())
+        }
     }
 
     fn configure_mpu(&self, config: &Self::MpuConfig, app_id: &AppId) {

@@ -633,7 +633,9 @@ impl<'a> Radio<'a> {
                 | nrf5x::constants::RADIO_STATE_TX => {
                     self.radio_off();
                     self.tx_client
-                        .map(|client| client.transmit_event(self.buffer.take().unwrap(), result));
+                        .map(|client| {
+                            self.buffer.take().map(|buf| client.transmit_event(buf, result))
+                        });
                 }
                 nrf5x::constants::RADIO_STATE_RXRU
                 | nrf5x::constants::RADIO_STATE_RXIDLE
