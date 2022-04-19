@@ -542,9 +542,15 @@ impl<'a> USART<'a> {
         }
     }
 
-    fn abort_tx(&self, usart: &USARTRegManager, rcode: Result<(), ErrorCode>) {
+    fn abort_tx(&self, usart: &USARTRegManager, rcode: Result<(), ErrorCode>) -> AbortResult {
         if self.usart_tx_state.get() == USARTStateTX::DMA_Transmitting {
+            // manually check interrupt has not fired
             self.disable_tx_interrupts(usart);
+            // manually check interrupt has not fired
+            // if both checks are the same, we succesfully aborted
+            // if interrupt already scheduled + indicates completion, instead return
+            // Callback(false)
+
             self.disable_tx(usart);
             self.usart_tx_state.set(USARTStateTX::Idle);
 
@@ -558,15 +564,18 @@ impl<'a> USART<'a> {
             });
             self.tx_len.set(0);
 
-            // alert client
-            self.client.map(|usartclient| {
-                if let UsartClient::Uart(_rx, Some(tx)) = usartclient {
-                    buffer
-                        .take()
-                        .map(|buf| tx.transmitted_buffer(buf, length, rcode));
-                }
-            });
+            // schedule deferred call
         }
+    }
+
+    fn DeferredCallHandler() {
+        self.client.map(|usartclient| {
+            if let UsartClient::Uart(_rx, Some(tx)) = usartclient {
+                buffer
+                    .take()
+                    .map(|buf| tx.transmitted_buffer(buf, length, Err(ReturnCode::CANCEL)));
+            }
+        });
     }
 
     fn enable_tx_empty_interrupt(&self, usart: &USARTRegManager) {
@@ -847,7 +856,29 @@ impl<'a> hil::uart::Transmit<'a> for USART<'a> {
         tx_buffer: &'static mut [u8],
         tx_len: usize,
     ) -> Result<(), (ErrorCode, &'static mut [u8])> {
-        unimplemented!()
+        if self.usart_tx_state.get() != USARTStateTX::Idle {
+            Err((ErrorCode::BUSY, tx_buffer))
+        } else {
+            if tx_len > tx_buffer.len() {
+                return Err((ErrorCode::SIZE, tx_buffer));
+            }
+            let usart = &USARTRegManager::new(&self);
+            // enable TX
+            self.enable_tx(usart);
+            self.usart_tx_state.set(USARTStateTX::DMA_Transmitting);
+
+            // set up dma transfer and start transmission
+            if self.tx_dma.get().is_some() {
+                self.tx_dma.get().map(move |dma| {
+                    dma.enable();
+                    self.tx_len.set(tx_len);
+                    dma.do_transfer(self.tx_dma_peripheral, tx_buffer, tx_len);
+                });
+                Ok(())
+            } else {
+                Err((ErrorCode::OFF, tx_buffer))
+            }
+        }
     }
 
     fn transmit_character(&self, character: u32) -> Result<(), ErrorCode> {
@@ -855,7 +886,13 @@ impl<'a> hil::uart::Transmit<'a> for USART<'a> {
     }
 
     fn transmit_abort(&self) -> hil::uart::AbortResult {
-        unimplemented!()
+        if self.usart_tx_state.get() != USARTStateTX::Idle {
+            let usart = &USARTRegManager::new(&self);
+            self.abort_tx(usart, Err(ErrorCode::CANCEL));
+            hil::uart::AbortResult::Callback(true)
+        } else {
+            hil::uart::AbortResult::NoCallback
+        }
     }
 }
 
