@@ -250,7 +250,7 @@ impl Kernel {
     where
         F: FnMut(&dyn process::Process),
     {
-        for process in self.processes.iter() {
+        for process in self.processes.iter().take(4) {
             match process {
                 Some(p) => {
                     closure(*p);
@@ -264,7 +264,7 @@ impl Kernel {
     pub(crate) fn get_process_iter(
         &self,
     ) -> core::iter::FilterMap<
-        core::slice::Iter<Option<&dyn process::Process>>,
+        core::iter::Take<core::slice::Iter<Option<&dyn process::Process>>>,
         fn(&Option<&'static dyn process::Process>) -> Option<&'static dyn process::Process>,
     > {
         fn keep_some(
@@ -272,7 +272,7 @@ impl Kernel {
         ) -> Option<&'static dyn process::Process> {
             x
         }
-        self.processes.iter().filter_map(keep_some)
+        self.processes.iter().take(4).filter_map(keep_some)
     }
 
     /// Run a closure on every valid process. This will iterate the array of
@@ -288,7 +288,7 @@ impl Kernel {
     ) where
         F: FnMut(&dyn process::Process),
     {
-        for process in self.processes.iter() {
+        for process in self.processes.iter().take(4) {
             match process {
                 Some(p) => {
                     closure(*p);
@@ -305,7 +305,7 @@ impl Kernel {
     where
         F: Fn(&dyn process::Process) -> Option<T>,
     {
-        for process in self.processes.iter() {
+        for process in self.processes.iter().take(4) {
             match process {
                 Some(p) => {
                     let ret = closure(*p);

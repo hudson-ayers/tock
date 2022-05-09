@@ -897,6 +897,7 @@ impl<'a, T: Default, Upcalls: UpcallSize, AllowROs: AllowRoSize, AllowRWs: Allow
             // memory first. We then create an `ProcessGrant` object for this
             // grant.
             if let Some(is_allocated) = process.grant_is_allocated(grant_num) {
+                assert!(is_allocated); // WCET optimization assumes all grants allocated at boot
                 if !is_allocated {
                     // Calculate the alignment and size for entire grant region.
                     let alloc_align = KernelManagedLayout::grant_align(grant_t_align);
@@ -1651,7 +1652,7 @@ pub struct Iter<
 
     /// Iterator over valid processes.
     subiter: core::iter::FilterMap<
-        core::slice::Iter<'a, Option<&'static dyn Process>>,
+        core::iter::Take<core::slice::Iter<'a, Option<&'static dyn Process>>>,
         fn(&Option<&'static dyn Process>) -> Option<&'static dyn Process>,
     >,
 }
