@@ -54,6 +54,7 @@
 //! - Shane Leonard <shanel@stanford.edu>
 
 #![no_std]
+#![feature(const_fn_trait_bound)]
 // If we don't build any actual register types, we don't need unsafe
 // code in this crate
 #![cfg_attr(not(feature = "register_types"), forbid(unsafe_code))]
