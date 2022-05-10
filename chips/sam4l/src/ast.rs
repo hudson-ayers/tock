@@ -299,6 +299,7 @@ impl<'a> Ast<'a> {
         regs.cv.set(val);
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         self.clear_alarm();
         self.callback.map(|cb| {

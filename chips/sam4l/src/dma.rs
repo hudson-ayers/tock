@@ -243,6 +243,7 @@ impl DMAChannel {
         self.enabled.get()
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         self.registers
             .idr

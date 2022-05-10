@@ -372,6 +372,7 @@ impl Adc {
     }
 
     /// Interrupt handler for the ADC.
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let status = self.registers.sr.is_set(Status::SEOC);
 

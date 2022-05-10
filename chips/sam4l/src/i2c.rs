@@ -747,6 +747,7 @@ impl I2CHw {
         self.dma.set(dma);
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         let old_status = {
             let twim = &TWIMRegisterManager::new(&self);

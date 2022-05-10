@@ -309,6 +309,7 @@ impl Crccu<'_> {
     }
 
     /// Handle an interrupt from the CRCCU
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         if self.registers.isr.is_set(Interrupt::ERR) {
             // A CRC error has occurred

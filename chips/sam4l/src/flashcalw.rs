@@ -483,6 +483,7 @@ impl FLASHCALW {
         self.registers.sr.is_set(PicoCacheStatus::CSTS)
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         // Disable the interrupt line for flash
         self.registers.fcr.modify(FlashControl::FRDY::CLEAR);

@@ -61,6 +61,7 @@ impl<'a> Trng<'a> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_interrupt(&self) {
         self.regs.idr.write(Interrupt::DATRDY::SET);
 
