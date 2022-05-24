@@ -10,19 +10,19 @@ pub unsafe trait ReadableDMABuffer {
 
 unsafe impl ReadableDMABuffer for () {
     fn lock(&self) -> Option<(*const u8, usize)> {
-	None
+        None
     }
 
     unsafe fn unlock(&self) -> bool {
-	false
+        false
     }
 
     fn map(&self, _fun: &mut dyn FnMut(&[u8])) -> bool {
-	false
+        false
     }
 
     fn locked(&self) -> bool {
-	false
+        false
     }
 }
 
@@ -103,7 +103,7 @@ unsafe impl ReadableDMABuffer for ImmutableDMABuffer {
     }
 
     fn locked(&self) -> bool {
-	self.locked.get()
+        self.locked.get()
     }
 }
 
@@ -172,7 +172,7 @@ unsafe impl ReadableDMABuffer for MutableDMABuffer {
         // `map`ped multiple times.
         if self.locked.get() {
             if let Some((ptr, len)) = self.buffer.replace(None) {
-                fun(unsafe { slice::from_raw_parts_mut(ptr, len) });
+                fun(unsafe { slice::from_raw_parts(ptr, len) });
                 self.buffer.replace(Some((ptr, len)));
                 true
             } else {
@@ -184,6 +184,6 @@ unsafe impl ReadableDMABuffer for MutableDMABuffer {
     }
 
     fn locked(&self) -> bool {
-	self.locked.get()
+        self.locked.get()
     }
 }

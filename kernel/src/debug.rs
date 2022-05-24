@@ -56,6 +56,7 @@ use core::str;
 
 use crate::collections::queue::Queue;
 use crate::collections::ring_buffer::RingBuffer;
+use crate::dmabuffer::{MutableDMABuffer, ReadableDMABuffer};
 use crate::hil;
 use crate::platform::chip::Chip;
 use crate::process::Process;
@@ -64,7 +65,6 @@ use crate::utilities::binary_write::BinaryToWriteWrapper;
 use crate::utilities::cells::NumericCellExt;
 use crate::utilities::cells::{MapCell, TakeCell};
 use crate::ErrorCode;
-use crate::dmabuffer::{MutableDMABuffer, ReadableDMABuffer};
 
 /// This trait is similar to std::io::Write in that it takes bytes instead of a string (contrary to
 /// core::fmt::Write), but io::Write isn't available in no_std (due to std::io::Error not being
@@ -379,6 +379,8 @@ pub struct DebugWriter {
     internal_buffer: TakeCell<'static, RingBuffer<'static, u8>>,
     // Number of debug!() calls.
     count: Cell<usize>,
+    // Whether output_buffer has been handed to lower layers
+    output_buf_available: Cell<bool>,
 }
 
 /// Static variable that holds the kernel's reference to the debug tool. This is
@@ -417,6 +419,7 @@ impl DebugWriter {
             output_buffer: out_buffer,
             internal_buffer: TakeCell::new(internal_buffer),
             count: Cell::new(0), // how many debug! calls
+            output_buf_available: Cell::new(true),
         }
     }
 
@@ -434,33 +437,36 @@ impl DebugWriter {
         // Can only publish if we have the output_buffer. If we don't that is
         // fine, we will do it when the transmit done callback happens.
         self.internal_buffer.map(|ring_buffer| {
-            if let Some(out_buffer) = self.output_buffer.take() {
-                let mut count = 0;
+            if self.output_buf_available.get() {
+                if let Some(out_buffer) = self.output_buffer.take() {
+                    let mut count = 0;
 
-                for dst in out_buffer.iter_mut() {
-                    match ring_buffer.dequeue() {
-                        Some(src) => {
-                            *dst = src;
-                            count += 1;
-                        }
-                        None => {
-                            break;
+                    for dst in out_buffer.iter_mut() {
+                        match ring_buffer.dequeue() {
+                            Some(src) => {
+                                *dst = src;
+                                count += 1;
+                            }
+                            None => {
+                                break;
+                            }
                         }
                     }
-                }
 
-		// Now that the data is copied, put the buffer back. Guaranteed
-		// to succeed, given we've just been able to take the buffer
-		// out.
-		assert!(self.output_buffer.set(out_buffer));
+                    // Now that the data is copied, put the buffer back. Guaranteed
+                    // to succeed, given we've just been able to take the buffer
+                    // out.
+                    assert!(self.output_buffer.set(out_buffer));
 
-                if count != 0 {
-                    // Transmit the data in the output buffer.
-                    let _ = self.uart.transmit_buffer(self.output_buffer, count);
+                    if count != 0 {
+                        // Transmit the data in the output buffer.
+                        let _ = self
+                            .uart
+                            .transmit_buffer(self.output_buffer, count)
+                            .map(|_| self.output_buf_available.set(false));
+                    }
                 }
-            } else {
-		assert!(self.output_buffer.locked());
-	    }
+            }
         });
     }
 
@@ -476,6 +482,7 @@ impl hil::uart::TransmitClient for DebugWriter {
         _tx_len: usize,
         _rcode: core::result::Result<(), ErrorCode>,
     ) {
+        self.output_buf_available.set(true);
         if self.internal_buffer.map_or(false, |buf| buf.has_elements()) {
             // Buffer not empty, go around again
             self.publish_bytes();
