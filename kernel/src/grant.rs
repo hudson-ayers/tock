@@ -616,7 +616,7 @@ struct GrantEnterLifetimeGuard<'a> {
 
 impl Drop for GrantEnterLifetimeGuard<'_> {
     fn drop(&mut self) {
-        self.process.leave_grant(self.grant_num);
+        //self.process.leave_grant(self.grant_num);
     }
 }
 
@@ -1618,7 +1618,7 @@ impl<T: Default, Upcalls: UpcallSize, AllowROs: AllowRoSize, AllowRWs: AllowRwSi
         F: FnMut(ProcessId, &mut GrantData<T>, &GrantKernelData),
     {
         // Create a the iterator across `ProcessGrant`s for each process.
-        for pg in self.iter() {
+        for pg in self.iter().take(4) {
             let processid = pg.processid();
             // Since we iterating, there is no return value we need to worry
             // about.

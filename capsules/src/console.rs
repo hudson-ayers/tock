@@ -122,8 +122,8 @@ impl<'a> Console<'a> {
             .get_readonly_processbuffer(ro_allow::WRITE)
             .map_or(0, |write| write.len())
             .min(len);
-        app.write_remaining = app.write_len;
-        self.send(app_id, app, kernel_data);
+        //app.write_remaining = app.write_len;
+        //self.send(app_id, app, kernel_data);
         Ok(())
     }
 
@@ -172,7 +172,8 @@ impl<'a> Console<'a> {
                                     return 0;
                                 }
                             };
-                            for (i, c) in remaining_data.iter().enumerate() {
+                            for (i, c) in remaining_data.iter().enumerate().take(10) {
+                                // TODO remove take
                                 if buffer.len() <= i {
                                     return i; // Short circuit on partial send
                                 }
@@ -183,7 +184,7 @@ impl<'a> Console<'a> {
                     })
                     .unwrap_or(0);
                 app.write_remaining -= transaction_len;
-                let _ = self.uart.transmit_buffer(buffer, transaction_len);
+                //let _ = self.uart.transmit_buffer(buffer, transaction_len);
             });
         } else {
             app.pending_write = true;
@@ -266,6 +267,7 @@ impl SyscallDriver for Console<'_> {
                         let len = arg1;
                         self.send_new(appid, app, kernel_data, len)
                     }
+                    /* // Remove receive support to simplify symbolic execution
                     2 => {
                         // getnstr
                         let len = arg1;
@@ -276,6 +278,7 @@ impl SyscallDriver for Console<'_> {
                         let _ = self.uart.receive_abort();
                         Ok(())
                     }
+                    */
                     _ => Err(ErrorCode::NOSUPPORT),
                 }
             })

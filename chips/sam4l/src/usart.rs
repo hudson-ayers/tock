@@ -891,6 +891,8 @@ impl<'a> uart::Transmit<'a> for USART<'a> {
         tx_buffer: &'static mut [u8],
         tx_len: usize,
     ) -> Result<(), (ErrorCode, &'static mut [u8])> {
+        Err((ErrorCode::BUSY, tx_buffer))
+        /* // TODO: bring back
         if self.usart_tx_state.get() != USARTStateTX::Idle {
             Err((ErrorCode::BUSY, tx_buffer))
         } else {
@@ -913,7 +915,7 @@ impl<'a> uart::Transmit<'a> for USART<'a> {
             } else {
                 Err((ErrorCode::OFF, tx_buffer))
             }
-        }
+        }*/
     }
 
     fn transmit_abort(&self) -> Result<(), ErrorCode> {
