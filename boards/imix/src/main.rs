@@ -296,8 +296,12 @@ unsafe fn set_pin_primary_functions(peripherals: &Sam4lDefaultPeripherals) {
 #[inline(never)]
 unsafe fn get_peripherals(
     pm: &'static sam4l::pm::PowerManager,
+    dynamic_deferred_caller: &'static DynamicDeferredCall,
 ) -> &'static Sam4lDefaultPeripherals {
-    static_init!(Sam4lDefaultPeripherals, Sam4lDefaultPeripherals::new(pm))
+    static_init!(
+        Sam4lDefaultPeripherals,
+        Sam4lDefaultPeripherals::new(pm, dynamic_deferred_caller)
+    )
 }
 
 /// Main function.
@@ -307,7 +311,15 @@ unsafe fn get_peripherals(
 pub unsafe fn main() {
     sam4l::init();
     let pm = static_init!(sam4l::pm::PowerManager, sam4l::pm::PowerManager::new());
-    let peripherals = get_peripherals(pm);
+    let dynamic_deferred_call_clients =
+        static_init!([DynamicDeferredCallClientState; 7], Default::default());
+    let dynamic_deferred_caller = static_init!(
+        DynamicDeferredCall,
+        DynamicDeferredCall::new(dynamic_deferred_call_clients)
+    );
+    DynamicDeferredCall::set_global_instance(dynamic_deferred_caller);
+
+    let peripherals = get_peripherals(pm, dynamic_deferred_caller);
 
     pm.setup_system_clock(
         sam4l::pm::SystemClockSource::PllExternalOscillatorAt48MHz {
@@ -322,7 +334,7 @@ pub unsafe fn main() {
 
     set_pin_primary_functions(peripherals);
 
-    peripherals.setup_dma();
+    peripherals.setup_peripherals();
     let chip = static_init!(
         sam4l::chip::Sam4l<Sam4lDefaultPeripherals>,
         sam4l::chip::Sam4l::new(pm, peripherals)
@@ -348,14 +360,6 @@ pub unsafe fn main() {
     );
 
     let board_kernel = static_init!(kernel::Kernel, kernel::Kernel::new(&PROCESSES));
-
-    let dynamic_deferred_call_clients =
-        static_init!([DynamicDeferredCallClientState; 5], Default::default());
-    let dynamic_deferred_caller = static_init!(
-        DynamicDeferredCall,
-        DynamicDeferredCall::new(dynamic_deferred_call_clients)
-    );
-    DynamicDeferredCall::set_global_instance(dynamic_deferred_caller);
 
     let process_printer =
         components::process_printer::ProcessPrinterTextComponent::new().finalize(());

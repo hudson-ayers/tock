@@ -20,11 +20,12 @@
 //! - Author:  Kevin Baichoo <kbaichoo@cs.stanford.edu>
 //! - Date: July 27, 2016
 
-use crate::deferred_call_tasks::Task;
 use crate::pm;
 use core::cell::Cell;
 use core::ops::{Index, IndexMut};
-use kernel::deferred_call::DeferredCall;
+use kernel::dynamic_deferred_call::{
+    DeferredCallHandle, DynamicDeferredCall, DynamicDeferredCallClient,
+};
 use kernel::hil;
 use kernel::utilities::cells::{OptionalCell, TakeCell};
 use kernel::utilities::registers::interfaces::{ReadWriteable, Readable, Writeable};
@@ -318,8 +319,6 @@ enum RegKey {
     GPFRLO,
 }
 
-static DEFERRED_CALL: DeferredCall<Task> = unsafe { DeferredCall::new(Task::Flashcalw) };
-
 /// There are 18 recognized commands for the flash. These are "bare-bones"
 /// commands and values that are written to the Flash's command register to
 /// inform the flash what to do. Table 14-5.
@@ -417,6 +416,8 @@ pub struct FLASHCALW {
     client: OptionalCell<&'static dyn hil::flash::Client<FLASHCALW>>,
     current_state: Cell<FlashState>,
     buffer: TakeCell<'static, Sam4lPage>,
+    deferred_caller: &'static DynamicDeferredCall,
+    handle: OptionalCell<DeferredCallHandle>,
 }
 
 // Few constants relating to module configuration.
@@ -435,7 +436,12 @@ const FREQ_PS1_FWS_0_MAX_FREQ: u32 = 8000000;
 const FREQ_PS2_FWS_0_MAX_FREQ: u32 = 24000000;
 
 impl FLASHCALW {
-    pub fn new(ahb_clk: pm::HSBClock, hramc1_clk: pm::HSBClock, pb_clk: pm::PBBClock) -> FLASHCALW {
+    pub fn new(
+        ahb_clk: pm::HSBClock,
+        hramc1_clk: pm::HSBClock,
+        pb_clk: pm::PBBClock,
+        deferred_caller: &'static DynamicDeferredCall,
+    ) -> FLASHCALW {
         FLASHCALW {
             registers: FLASHCALW_ADDRESS,
             ahb_clock: pm::Clock::HSB(ahb_clk),
@@ -444,6 +450,8 @@ impl FLASHCALW {
             client: OptionalCell::empty(),
             current_state: Cell::new(FlashState::Unconfigured),
             buffer: TakeCell::empty(),
+            deferred_caller,
+            handle: OptionalCell::empty(),
         }
     }
 
@@ -786,6 +794,10 @@ impl FLASHCALW {
 
 // Implementation of high level calls using the low-lv functions.
 impl FLASHCALW {
+    pub fn initialize_callback_handle(&self, handle: DeferredCallHandle) {
+        self.handle.replace(handle);
+    }
+
     pub fn configure(&self) {
         // Enable all clocks (if they aren't on already...).
         pm::enable_clock(self.ahb_clock);
@@ -854,7 +866,7 @@ impl FLASHCALW {
         // This is kind of strange, but because read() in this case is
         // synchronous, we still need to schedule as if we had an interrupt so
         // we can allow this function to return and then call the callback.
-        DEFERRED_CALL.set();
+        self.handle.map(|handle| self.deferred_caller.set(*handle));
 
         Ok(())
     }
@@ -928,5 +940,11 @@ impl hil::flash::Flash for FLASHCALW {
 
     fn erase_page(&self, page_number: usize) -> Result<(), ErrorCode> {
         self.erase_page(page_number as i32)
+    }
+}
+
+impl DynamicDeferredCallClient for FLASHCALW {
+    fn call(&self, _handle: DeferredCallHandle) {
+        self.handle_interrupt();
     }
 }

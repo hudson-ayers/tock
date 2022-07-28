@@ -48,10 +48,11 @@
 //
 // - Support continuous-mode CRC
 
-use crate::deferred_call_tasks::Task;
 use crate::pm::{disable_clock, enable_clock, Clock, HSBClock, PBBClock};
 use core::cell::Cell;
-use kernel::deferred_call::DeferredCall;
+use kernel::dynamic_deferred_call::{
+    DeferredCallHandle, DynamicDeferredCall, DynamicDeferredCallClient,
+};
 use kernel::hil::crc::{Client, Crc, CrcAlgorithm, CrcOutput};
 use kernel::utilities::cells::OptionalCell;
 use kernel::utilities::leasable_buffer::LeasableMutableBuffer;
@@ -65,8 +66,6 @@ use kernel::ErrorCode;
 // Base address of CRCCU registers.  See "7.1 Product Mapping"
 pub const BASE_ADDRESS: StaticRef<CrccuRegisters> =
     unsafe { StaticRef::new(0x400A4000 as *const CrccuRegisters) };
-
-static DEFERRED_CALL: DeferredCall<Task> = unsafe { DeferredCall::new(Task::CRCCU) };
 
 #[repr(C)]
 pub struct CrccuRegisters {
@@ -265,10 +264,17 @@ pub struct Crccu<'a> {
     // Must be aligned to a 512-byte boundary, which is guaranteed by
     // the struct definition.
     descriptor: Descriptor,
+
+    // Deferred Call support
+    deferred_caller: &'a DynamicDeferredCall,
+    handle: OptionalCell<DeferredCallHandle>,
 }
 
-impl Crccu<'_> {
-    pub fn new(base_addr: StaticRef<CrccuRegisters>) -> Self {
+impl<'a> Crccu<'a> {
+    pub fn new(
+        base_addr: StaticRef<CrccuRegisters>,
+        deferred_caller: &'a DynamicDeferredCall,
+    ) -> Self {
         Crccu {
             registers: base_addr,
             client: OptionalCell::empty(),
@@ -277,7 +283,13 @@ impl Crccu<'_> {
             current_full_buffer: Cell::new((0 as *mut u8, 0)),
             compute_requested: Cell::new(false),
             descriptor: Descriptor::new(),
+            deferred_caller,
+            handle: OptionalCell::empty(),
         }
+    }
+
+    pub fn initialize_callback_handle(&self, handle: DeferredCallHandle) {
+        self.handle.replace(handle);
     }
 
     fn init(&self) {
@@ -364,8 +376,10 @@ impl Crccu<'_> {
             }
         }
     }
+}
 
-    pub fn handle_deferred_call(&self) {
+impl<'a> DynamicDeferredCallClient for Crccu<'a> {
+    fn call(&self, _handle: DeferredCallHandle) {
         // A deferred call is currently only issued on a call to
         // compute, in which case we need to provide the CRC to the
         // client
@@ -533,7 +547,7 @@ impl<'a> Crc<'a> for Crccu<'a> {
 
         // Request a deferred call such that we can provide the result
         // back to the client
-        DEFERRED_CALL.set();
+        self.handle.map(|handle| self.deferred_caller.set(*handle));
 
         Ok(())
     }
