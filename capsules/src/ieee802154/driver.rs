@@ -4,6 +4,7 @@
 //! frames. Also provides a minimal list-based interface for managing keys and
 //! known link neighbors, which is needed for 802.15.4 security.
 
+use crate::driver::Task;
 use crate::ieee802154::{device, framer};
 use crate::net::ieee802154::{AddressMode, Header, KeyId, MacAddress, PanID, SecurityLevel};
 use crate::net::stream::{decode_bytes, decode_u8, encode_bytes, encode_u8, SResult};
@@ -11,8 +12,8 @@ use crate::net::stream::{decode_bytes, decode_u8, encode_bytes, encode_u8, SResu
 use core::cell::Cell;
 use core::cmp::min;
 
-use kernel::dynamic_deferred_call::{
-    DeferredCallHandle, DynamicDeferredCall, DynamicDeferredCallClient,
+use kernel::deferred_call::{
+    DeferredCall, DeferredCallManager, DeferredCallMapper, DeferredCallTask, PeripheralTask,
 };
 use kernel::grant::{AllowRoCount, AllowRwCount, Grant, UpcallCount};
 use kernel::processbuffer::{ReadableProcessBuffer, WriteableProcessBuffer};
@@ -172,7 +173,11 @@ pub struct App {
     pending_tx: Option<(u16, Option<(SecurityLevel, KeyId)>)>,
 }
 
-pub struct RadioDriver<'a> {
+pub struct RadioDriver<
+    'a,
+    PT: PeripheralTask,
+    M: DeferredCallMapper<DeferredCallTask<PT, Task>> + 'static,
+> {
     /// Underlying MAC device, possibly multiplexed
     mac: &'a dyn device::MacDevice<'a>,
 
@@ -202,10 +207,7 @@ pub struct RadioDriver<'a> {
     kernel_tx: TakeCell<'static, [u8]>,
 
     /// Used to ensure callbacks are delivered during upcalls
-    deferred_caller: &'a DynamicDeferredCall,
-
-    /// Also used for deferred calls
-    handle: OptionalCell<DeferredCallHandle>,
+    deferred_call: DeferredCall<PT, Task, M>,
 
     /// Used to deliver callbacks to the correct app during deferred calls
     saved_appid: OptionalCell<ProcessId>,
@@ -214,7 +216,9 @@ pub struct RadioDriver<'a> {
     saved_result: OptionalCell<Result<(), ErrorCode>>,
 }
 
-impl<'a> RadioDriver<'a> {
+impl<'a, PT: PeripheralTask, M: DeferredCallMapper<DeferredCallTask<PT, Task>> + 'static>
+    RadioDriver<'a, PT, M>
+{
     pub fn new(
         mac: &'a dyn device::MacDevice<'a>,
         grant: Grant<
@@ -224,9 +228,9 @@ impl<'a> RadioDriver<'a> {
             AllowRwCount<{ rw_allow::COUNT }>,
         >,
         kernel_tx: &'static mut [u8],
-        deferred_caller: &'a DynamicDeferredCall,
-    ) -> RadioDriver<'a> {
-        RadioDriver {
+        dc_mgr: &'static DeferredCallManager<DeferredCallTask<PT, Task>, M>,
+    ) -> Self {
+        Self {
             mac,
             neighbors: MapCell::new(Default::default()),
             num_neighbors: Cell::new(0),
@@ -235,15 +239,10 @@ impl<'a> RadioDriver<'a> {
             apps: grant,
             current_app: OptionalCell::empty(),
             kernel_tx: TakeCell::new(kernel_tx),
-            deferred_caller,
+            deferred_call: DeferredCall::new(DeferredCallTask::Capsule(Task::Radio), dc_mgr),
             saved_appid: OptionalCell::empty(),
             saved_result: OptionalCell::empty(),
-            handle: OptionalCell::empty(),
         }
-    }
-
-    pub fn initialize_callback_handle(&self, handle: DeferredCallHandle) {
-        self.handle.replace(handle);
     }
 
     // Neighbor management functions
@@ -387,7 +386,7 @@ impl<'a> RadioDriver<'a> {
         if result != Ok(()) {
             self.saved_appid.set(appid);
             self.saved_result.set(result);
-            self.handle.map(|handle| self.deferred_caller.set(*handle));
+            self.deferred_call.set();
         }
     }
 
@@ -472,10 +471,8 @@ impl<'a> RadioDriver<'a> {
             }
         })
     }
-}
 
-impl DynamicDeferredCallClient for RadioDriver<'_> {
-    fn call(&self, _handle: DeferredCallHandle) {
+    pub fn handle_deferred_call(&self) {
         let _ = self
             .apps
             .enter(self.saved_appid.unwrap_or_panic(), |_app, upcalls| {
@@ -496,7 +493,9 @@ impl DynamicDeferredCallClient for RadioDriver<'_> {
     }
 }
 
-impl framer::DeviceProcedure for RadioDriver<'_> {
+impl<'a, PT: PeripheralTask, M: DeferredCallMapper<DeferredCallTask<PT, Task>> + 'static>
+    framer::DeviceProcedure for RadioDriver<'_, PT, M>
+{
     /// Gets the long address corresponding to the neighbor that matches the given
     /// MAC address. If no such neighbor exists, returns `None`.
     fn lookup_addr_long(&self, addr: MacAddress) -> Option<[u8; 8]> {
@@ -512,7 +511,9 @@ impl framer::DeviceProcedure for RadioDriver<'_> {
     }
 }
 
-impl framer::KeyProcedure for RadioDriver<'_> {
+impl<'a, PT: PeripheralTask, M: DeferredCallMapper<DeferredCallTask<PT, Task>> + 'static>
+    framer::KeyProcedure for RadioDriver<'_, PT, M>
+{
     /// Gets the key corresponding to the key that matches the given security
     /// level `level` and key ID `key_id`. If no such key matches, returns
     /// `None`.
@@ -526,7 +527,9 @@ impl framer::KeyProcedure for RadioDriver<'_> {
     }
 }
 
-impl SyscallDriver for RadioDriver<'_> {
+impl<'a, PT: PeripheralTask, M: DeferredCallMapper<DeferredCallTask<PT, Task>> + 'static>
+    SyscallDriver for RadioDriver<'_, PT, M>
+{
     /// Setup buffers to read/write from.
     ///
     /// ### `allow_num`
@@ -895,7 +898,9 @@ impl SyscallDriver for RadioDriver<'_> {
     }
 }
 
-impl device::TxClient for RadioDriver<'_> {
+impl<'a, PT: PeripheralTask, M: DeferredCallMapper<DeferredCallTask<PT, Task>> + 'static>
+    device::TxClient for RadioDriver<'_, PT, M>
+{
     fn send_done(&self, spi_buf: &'static mut [u8], acked: bool, result: Result<(), ErrorCode>) {
         self.kernel_tx.replace(spi_buf);
         self.current_app.take().map(|appid| {
@@ -932,7 +937,9 @@ fn encode_address(addr: &Option<MacAddress>) -> usize {
     ((AddressMode::from(addr) as usize) << 16) | short_addr_only
 }
 
-impl device::RxClient for RadioDriver<'_> {
+impl<'a, PT: PeripheralTask, M: DeferredCallMapper<DeferredCallTask<PT, Task>> + 'static>
+    device::RxClient for RadioDriver<'_, PT, M>
+{
     fn receive<'b>(&self, buf: &'b [u8], header: Header<'b>, data_offset: usize, data_len: usize) {
         self.apps.each(|_, _, kernel_data| {
             let read_present = kernel_data

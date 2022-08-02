@@ -11,16 +11,18 @@
 
 mod imix_components;
 use capsules::alarm::AlarmDriver;
+use capsules::driver::Task as CapsuleTask;
 use capsules::net::ieee802154::MacAddress;
 use capsules::net::ipv6::ip_utils::IPAddr;
 use capsules::virtual_aes_ccm::MuxAES128CCM;
 use capsules::virtual_alarm::VirtualMuxAlarm;
 use capsules::virtual_i2c::MuxI2C;
 use capsules::virtual_spi::VirtualSpiMasterDevice;
+use sam4l::deferred_call_tasks::Task as Sam4lTask;
 //use capsules::virtual_timer::MuxTimer;
 use kernel::capabilities;
 use kernel::component::Component;
-use kernel::deferred_call::DeferredCallManager;
+use kernel::deferred_call::{DeferredCallManager, DeferredCallMapper, DeferredCallTask};
 use kernel::dynamic_deferred_call::{DynamicDeferredCall, DynamicDeferredCallClientState};
 use kernel::hil::i2c::I2CMaster;
 use kernel::hil::radio;
@@ -96,7 +98,9 @@ const FAULT_RESPONSE: kernel::process::PanicFaultPolicy = kernel::process::Panic
 static mut PROCESSES: [Option<&'static dyn kernel::process::Process>; NUM_PROCS] =
     [None; NUM_PROCS];
 
-static mut CHIP: Option<&'static sam4l::chip::Sam4l<Sam4lDefaultPeripherals>> = None;
+static mut CHIP: Option<
+    &'static sam4l::chip::Sam4l<Sam4lDefaultPeripherals<CapsuleTask, DefCallMapper>>,
+> = None;
 static mut PROCESS_PRINTER: Option<&'static kernel::process::ProcessPrinterText> = None;
 
 /// Dummy buffer that causes the linker to reserve enough space for the stack.
@@ -104,6 +108,22 @@ static mut PROCESS_PRINTER: Option<&'static kernel::process::ProcessPrinterText>
 #[link_section = ".stack_buffer"]
 pub static mut STACK_MEMORY: [u8; 0x2000] = [0; 0x2000];
 
+struct DefCallMapper {
+    radio: &'static capsules::ieee802154::RadioDriver<'static, Sam4lTask, Self>,
+    crccu: &'static sam4l::crccu::Crccu<'static, CapsuleTask, Self>,
+    flashcalw: &'static sam4l::flashcalw::FLASHCALW<CapsuleTask, Self>,
+}
+
+impl DeferredCallMapper<DeferredCallTask<Sam4lTask, CapsuleTask>> for DefCallMapper {
+    fn handle_deferred_call(&self, task: DeferredCallTask<Sam4lTask, CapsuleTask>) -> bool {
+        match task {
+            DeferredCallTask::Capsule(CapsuleTask::Radio) => self.radio.handle_deferred_call(),
+            DeferredCallTask::Peripheral(Sam4lTask::Flashcalw) => self.flashcalw.handle_interrupt(),
+            DeferredCallTask::Peripheral(Sam4lTask::CRCCU) => self.crccu.handle_deferred_call(),
+        }
+        return true;
+    }
+}
 struct Imix {
     pconsole: &'static capsules::process_console::ProcessConsole<
         'static,
@@ -135,7 +155,10 @@ struct Imix {
     ipc: kernel::ipc::IPC<NUM_PROCS>,
     ninedof: &'static capsules::ninedof::NineDof<'static>,
     udp_driver: &'static capsules::net::udp::UDPDriver<'static>,
-    crc: &'static capsules::crc::CrcDriver<'static, sam4l::crccu::Crccu<'static>>,
+    crc: &'static capsules::crc::CrcDriver<
+        'static,
+        sam4l::crccu::Crccu<'static, CapsuleTask, DefCallMapper>,
+    >,
     usb_driver: &'static capsules::usb::usb_user::UsbSyscallDriver<
         'static,
         capsules::usb::usbc_client::Client<'static, sam4l::usbc::Usbc<'static>>,
@@ -189,7 +212,9 @@ impl SyscallDriverLookup for Imix {
     }
 }
 
-impl KernelResources<sam4l::chip::Sam4l<Sam4lDefaultPeripherals>> for Imix {
+impl KernelResources<sam4l::chip::Sam4l<Sam4lDefaultPeripherals<CapsuleTask, DefCallMapper>>>
+    for Imix
+{
     type SyscallDriverLookup = Self;
     type SyscallFilter = ();
     type ProcessFault = ();
@@ -221,7 +246,9 @@ impl KernelResources<sam4l::chip::Sam4l<Sam4lDefaultPeripherals>> for Imix {
     }
 }
 
-unsafe fn set_pin_primary_functions(peripherals: &Sam4lDefaultPeripherals) {
+unsafe fn set_pin_primary_functions(
+    peripherals: &Sam4lDefaultPeripherals<CapsuleTask, DefCallMapper>,
+) {
     use sam4l::gpio::PeripheralFunction::{A, B, C, E};
 
     // Right column: Imix pin name
@@ -296,14 +323,14 @@ unsafe fn set_pin_primary_functions(peripherals: &Sam4lDefaultPeripherals) {
 /// these static_inits is wasted.
 #[inline(never)]
 unsafe fn get_peripherals(
+    dc_mgr: &'static DeferredCallManager<DeferredCallTask<Sam4lTask, CapsuleTask>, DefCallMapper>,
     pm: &'static sam4l::pm::PowerManager,
-) -> &'static Sam4lDefaultPeripherals {
-    let dc_mgr = static_init!(
-        DeferredCallManager<sam4l::deferred_call_tasks::Task>,
-        DeferredCallManager::new()
-    );
+) -> &'static Sam4lDefaultPeripherals<CapsuleTask, DefCallMapper> {
     static_init!(
-        Sam4lDefaultPeripherals,
+        Sam4lDefaultPeripherals<
+                CapsuleTask,
+                DefCallMapper
+            >,
         Sam4lDefaultPeripherals::new(pm, dc_mgr)
     )
 }
@@ -315,7 +342,11 @@ unsafe fn get_peripherals(
 pub unsafe fn main() {
     sam4l::init();
     let pm = static_init!(sam4l::pm::PowerManager, sam4l::pm::PowerManager::new());
-    let peripherals = get_peripherals(pm);
+    let dc_mgr = static_init!(
+        DeferredCallManager<DeferredCallTask<Sam4lTask, CapsuleTask>, DefCallMapper>,
+        DeferredCallManager::new()
+    );
+    let peripherals = get_peripherals(dc_mgr, pm);
 
     pm.setup_system_clock(
         sam4l::pm::SystemClockSource::PllExternalOscillatorAt48MHz {
@@ -332,7 +363,7 @@ pub unsafe fn main() {
 
     peripherals.setup_dma();
     let chip = static_init!(
-        sam4l::chip::Sam4l<Sam4lDefaultPeripherals>,
+        sam4l::chip::Sam4l<Sam4lDefaultPeripherals<CapsuleTask, DefCallMapper>>,
         sam4l::chip::Sam4l::new(pm, peripherals)
     );
     CHIP = Some(chip);
@@ -493,7 +524,9 @@ pub unsafe fn main() {
     .finalize(components::button_component_buf!(sam4l::gpio::GPIOPin));
 
     let crc = CrcComponent::new(board_kernel, capsules::crc::DRIVER_NUM, &peripherals.crccu)
-        .finalize(components::crc_component_helper!(sam4l::crccu::Crccu));
+        .finalize(
+            components::crc_component_helper!(sam4l::crccu::Crccu<CapsuleTask, DefCallMapper>),
+        );
 
     let ac_0 = static_init!(
         sam4l::acifc::AcChannel,
@@ -547,18 +580,20 @@ pub unsafe fn main() {
 
     // Can this initialize be pushed earlier, or into component? -pal
     let _ = rf233.initialize(&mut RF233_BUF, &mut RF233_REG_WRITE, &mut RF233_REG_READ);
-    let (_, mux_mac) = components::ieee802154::Ieee802154Component::new(
+    let (radio_driver, mux_mac) = components::ieee802154::Ieee802154Component::new(
         board_kernel,
         capsules::ieee802154::DRIVER_NUM,
         rf233,
         aes_mux,
         PAN_ID,
         serial_num_bottom_16,
-        dynamic_deferred_caller,
+        dc_mgr,
     )
     .finalize(components::ieee802154_component_helper!(
         capsules::rf233::RF233<'static, VirtualSpiMasterDevice<'static, sam4l::spi::SpiHw>>,
-        sam4l::aes::Aes<'static>
+        sam4l::aes::Aes<'static>,
+        sam4l::deferred_call_tasks::Task,
+        DefCallMapper,
     ));
 
     let usb_driver = UsbComponent::new(
@@ -586,7 +621,7 @@ pub unsafe fn main() {
         &_estorage as *const u8 as usize - &_sstorage as *const u8 as usize, // length of kernel region
     )
     .finalize(components::nv_storage_component_helper!(
-        sam4l::flashcalw::FLASHCALW
+        sam4l::flashcalw::FLASHCALW<CapsuleTask, DefCallMapper>
     ));
 
     let local_ip_ifaces = static_init!(
@@ -654,6 +689,18 @@ pub unsafe fn main() {
         scheduler,
         systick: cortexm4::systick::SysTick::new(),
     };
+
+    // Setup deferred call mapping
+    let mapper = static_init!(
+        DefCallMapper,
+        DefCallMapper {
+            radio: radio_driver,
+            flashcalw: &peripherals.flash_controller,
+            crccu: &peripherals.crccu,
+        }
+    );
+
+    dc_mgr.set_mapping(mapper);
 
     // Need to initialize the UART for the nRF51 serialization.
     imix.nrf51822.initialize();
