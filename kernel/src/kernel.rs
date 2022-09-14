@@ -97,23 +97,21 @@ enum AllocResult {
 /// Tries to allocate the grant region for specified driver and process.
 /// Returns if a new grant was allocated or not
 fn try_allocate_grant<KR: KernelResources<C>, C: Chip>(
-    resources: &KR,
+    syscall_driver_lookup: &KR::SyscallDriverLookup,
     driver_number: usize,
     process: &dyn process::Process,
 ) -> AllocResult {
     let before_count = process.grant_allocated_count().unwrap_or(0);
-    resources
-        .syscall_driver_lookup()
-        .with_driver(driver_number, |driver| match driver {
-            Some(d) => match d.allocate_grant(process.processid()).is_ok() {
-                true if before_count == process.grant_allocated_count().unwrap_or(0) => {
-                    AllocResult::SameAllocation
-                }
-                true => AllocResult::NewAllocation,
-                false => AllocResult::NoAllocation,
-            },
-            None => AllocResult::NoAllocation,
-        })
+    syscall_driver_lookup.with_driver(driver_number, |driver| match driver {
+        Some(d) => match d.allocate_grant(process.processid()).is_ok() {
+            true if before_count == process.grant_allocated_count().unwrap_or(0) => {
+                AllocResult::SameAllocation
+            }
+            true => AllocResult::NewAllocation,
+            false => AllocResult::NoAllocation,
+        },
+        None => AllocResult::NoAllocation,
+    })
 }
 
 impl Kernel {
@@ -932,7 +930,11 @@ impl Kernel {
                                 // If we get a memory error, we always try to
                                 // allocate the grant since this could be the
                                 // first time the grant is getting accessed.
-                                match try_allocate_grant(resources, driver_number, process) {
+                                match try_allocate_grant::<KR, C>(
+                                    resources.syscall_driver_lookup(),
+                                    driver_number,
+                                    process,
+                                ) {
                                     AllocResult::NewAllocation => {
                                         // Now we try again. It is possible that
                                         // the capsule did not actually allocate
@@ -1051,7 +1053,11 @@ impl Kernel {
                                 // If we get a memory error, we always try to
                                 // allocate the grant since this could be the
                                 // first time the grant is getting accessed.
-                                match try_allocate_grant(resources, driver_number, process) {
+                                match try_allocate_grant::<KR, C>(
+                                    resources.syscall_driver_lookup(),
+                                    driver_number,
+                                    process,
+                                ) {
                                     AllocResult::NewAllocation => {
                                         // If we actually allocated a new grant,
                                         // try again and honor the result.
@@ -1222,7 +1228,11 @@ impl Kernel {
                                 // If we get a memory error, we always try to
                                 // allocate the grant since this could be the
                                 // first time the grant is getting accessed.
-                                match try_allocate_grant(resources, driver_number, process) {
+                                match try_allocate_grant::<KR, C>(
+                                    resources.syscall_driver_lookup(),
+                                    driver_number,
+                                    process,
+                                ) {
                                     AllocResult::NewAllocation => {
                                         // If we actually allocated a new grant,
                                         // try again and honor the result.
