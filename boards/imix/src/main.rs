@@ -514,7 +514,7 @@ pub unsafe fn main() {
         board_kernel,
         capsules::analog_comparator::DRIVER_NUM,
     )
-    .finalize(components::acomp_component_buf!(sam4l::acifc::Acifc));
+    .finalize(components::acomp_component_static!(sam4l::acifc::Acifc));
     let rng = RngComponent::new(board_kernel, capsules::rng::DRIVER_NUM, &peripherals.trng)
         .finalize(components::rng_component_static!());
 

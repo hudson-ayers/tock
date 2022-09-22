@@ -617,7 +617,7 @@ pub unsafe fn main() {
         board_kernel,
         capsules::analog_comparator::DRIVER_NUM,
     )
-    .finalize(components::acomp_component_buf!(
+    .finalize(components::acomp_component_static!(
         nrf52840::acomp::Comparator
     ));
 

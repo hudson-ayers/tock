@@ -25,7 +25,6 @@ use kernel;
 use kernel::capabilities;
 use kernel::component::Component;
 use kernel::create_capability;
-use kernel::static_init_half;
 
 use capsules::analog_comparator;
 
@@ -46,12 +45,9 @@ macro_rules! acomp_component_helper {
 }
 
 #[macro_export]
-macro_rules! acomp_component_buf {
+macro_rules! acomp_component_static {
     ($Comp:ty $(,)?) => {{
-        use capsules::analog_comparator::AnalogComparator;
-        use core::mem::MaybeUninit;
-        static mut BUF: MaybeUninit<AnalogComparator<'static, $Comp>> = MaybeUninit::uninit();
-        &mut BUF
+        kernel::static_buf!(capsules::analog_comparator::AnalogComparator<'static, $Comp>)
     };};
 }
 
@@ -88,11 +84,11 @@ impl<AC: 'static + kernel::hil::analog_comparator::AnalogComparator<'static>> Co
         let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
         let grant_ac = self.board_kernel.create_grant(self.driver_num, &grant_cap);
 
-        let analog_comparator = static_init_half!(
-            static_buffer,
-            analog_comparator::AnalogComparator<'static, AC>,
-            analog_comparator::AnalogComparator::new(self.comp, self.ac_channels, grant_ac)
-        );
+        let analog_comparator = static_buffer.write(analog_comparator::AnalogComparator::new(
+            self.comp,
+            self.ac_channels,
+            grant_ac,
+        ));
         self.comp.set_client(analog_comparator);
 
         analog_comparator
