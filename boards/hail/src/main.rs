@@ -409,7 +409,7 @@ pub unsafe fn main() {
             )
         ),
     )
-    .finalize(components::button_component_buf!(sam4l::gpio::GPIOPin));
+    .finalize(components::button_component_static!(sam4l::gpio::GPIOPin));
 
     // Setup ADC
     let adc_channels = static_init!(
