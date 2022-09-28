@@ -628,26 +628,23 @@ pub unsafe fn main() {
         components::bus8080_bus_component_static!(stm32f412g::fsmc::Fsmc,),
     );
 
-    let tft = components::st77xx::ST77XXComponent::new(mux_alarm).finalize(
-        components::st77xx_component_helper!(
-            // screen
-            &capsules::st77xx::ST7789H2,
-            // bus type
-            capsules::bus::Bus8080Bus<'static, stm32f412g::fsmc::Fsmc>,
-            // bus
-            &bus,
-            // timer type
-            stm32f412g::tim2::Tim2,
-            // pin type
-            stm32f412g::gpio::Pin,
-            // dc pin (optional)
-            None,
-            // reset pin
-            base_peripherals
-                .gpio_ports
-                .get_pin(stm32f412g::gpio::PinId::PD11)
-        ),
-    );
+    let tft = components::st77xx::ST77XXComponent::new(
+        mux_alarm,
+        bus,
+        None,
+        base_peripherals
+            .gpio_ports
+            .get_pin(stm32f412g::gpio::PinId::PD11),
+        &capsules::st77xx::ST7789H2,
+    )
+    .finalize(components::st77xx_component_static!(
+        // bus type
+        capsules::bus::Bus8080Bus<'static, stm32f412g::fsmc::Fsmc>,
+        // timer type
+        stm32f412g::tim2::Tim2,
+        // pin type
+        stm32f412g::gpio::Pin,
+    ));
 
     let _ = tft.init();
 
