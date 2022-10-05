@@ -746,10 +746,11 @@ impl Kernel {
                     // This check is the work we needed to do.
                     self.decrement_work();
 
-                    if resources
-                        .credentials_checking_policy()
-                        .has_unique_identifiers(process, self.processes)
-                    {
+                    if crate::process_checker::has_unique_identifiers(
+                        process,
+                        self.processes,
+                        resources.credentials_checking_policy(),
+                    ) {
                         // Has a unique Application Identifier, push the first stack frame
                         // and make it runnable.
                         let _ = process.enqueue_init_task(&self.init_cap);
