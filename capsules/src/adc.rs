@@ -149,9 +149,7 @@ impl Default for AppSys {
 /// The size is chosen somewhat arbitrarily, but has been tested. At 175000 Hz,
 /// buffers need to be swapped every 70 us and copied over before the next
 /// swap. In testing, it seems to keep up fine.
-pub static mut ADC_BUFFER1: [u16; 128] = [0; 128];
-pub static mut ADC_BUFFER2: [u16; 128] = [0; 128];
-pub static mut ADC_BUFFER3: [u16; 128] = [0; 128];
+pub const BUF_LEN: usize = 128;
 
 impl<'a, A: hil::adc::Adc + hil::adc::AdcHighSpeed> AdcDedicated<'a, A> {
     /// Create a new `Adc` application interface.

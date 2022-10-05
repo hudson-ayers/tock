@@ -8,7 +8,9 @@
 #![cfg_attr(not(doc), no_main)]
 #![deny(missing_docs)]
 
+use capsules::adc::AdcDedicated;
 use components::gpio::GpioComponent;
+use core::mem::MaybeUninit;
 use kernel::capabilities;
 use kernel::component::Component;
 use kernel::dynamic_deferred_call::DynamicDeferredCall;
@@ -364,7 +366,6 @@ pub unsafe fn main() {
     .finalize(components::alarm_component_static!(msp432::timer::TimerA));
 
     // Setup ADC
-
     setup_adc_pins(&peripherals.gpio);
 
     let adc_channels = static_init!(
@@ -396,22 +397,51 @@ pub unsafe fn main() {
             &msp432::adc::Channel::Channel23, // A23
         ]
     );
+    let adc = kernel::static_buf!(capsules::adc::AdcDedicated<'static, msp432::adc::Adc<'static>>);
+    let buffer1 = kernel::static_buf!([u16; capsules::adc::BUF_LEN]);
+    let buffer2 = kernel::static_buf!([u16; capsules::adc::BUF_LEN]);
+    let buffer3 = kernel::static_buf!([u16; capsules::adc::BUF_LEN]);
+    let buffer1 = buffer1.write([0; capsules::adc::BUF_LEN]);
+    let buffer2 = buffer2.write([0; capsules::adc::BUF_LEN]);
+    let buffer3 = buffer3.write([0; capsules::adc::BUF_LEN]);
 
-    let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
-    let grant_adc = board_kernel.create_grant(capsules::adc::DRIVER_NUM, &grant_cap);
-    let adc = static_init!(
-        capsules::adc::AdcDedicated<'static, msp432::adc::Adc>,
-        capsules::adc::AdcDedicated::new(
-            &peripherals.adc,
-            grant_adc,
-            adc_channels,
-            &mut capsules::adc::ADC_BUFFER1,
-            &mut capsules::adc::ADC_BUFFER2,
-            &mut capsules::adc::ADC_BUFFER3
-        )
+    //fn finalize<A: kernel::hil::adc::Adc + kernel::hil::adc::AdcHighSpeed + 'static>(
+    type A = msp432::adc::Adc<'static>;
+    fn finalize(
+        adc: &'static mut MaybeUninit<AdcDedicated<'static, A>>,
+        buffer1: &'static mut [u16; capsules::adc::BUF_LEN],
+        buffer2: &'static mut [u16; capsules::adc::BUF_LEN],
+        buffer3: &'static mut [u16; capsules::adc::BUF_LEN],
+        peripheral_adc: &'static A,
+        channels: &'static [&'static <A as kernel::hil::adc::Adc>::Channel],
+        board_kernel: &'static kernel::Kernel,
+        driver_num: usize,
+    ) -> &'static AdcDedicated<'static, A> {
+        let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
+
+        let adc = adc.write(AdcDedicated::new(
+            &peripheral_adc,
+            board_kernel.create_grant(driver_num, &grant_cap),
+            channels,
+            buffer1,
+            buffer2,
+            buffer3,
+        ));
+        peripheral_adc.set_client(adc);
+
+        adc
+    }
+
+    let adc = finalize(
+        adc,
+        buffer1,
+        buffer2,
+        buffer3,
+        &peripherals.adc,
+        adc_channels,
+        board_kernel,
+        capsules::adc::DRIVER_NUM,
     );
-
-    peripherals.adc.set_client(adc);
 
     // Set the reference voltage for the ADC to 2.5V
     peripherals
