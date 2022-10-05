@@ -405,9 +405,9 @@ pub unsafe fn main() {
     let buffer2 = buffer2.write([0; capsules::adc::BUF_LEN]);
     let buffer3 = buffer3.write([0; capsules::adc::BUF_LEN]);
 
-    //fn finalize<A: kernel::hil::adc::Adc + kernel::hil::adc::AdcHighSpeed + 'static>(
-    type A = msp432::adc::Adc<'static>;
-    fn finalize(
+    fn finalize<A: kernel::hil::adc::Adc + kernel::hil::adc::AdcHighSpeed + 'static>(
+        //type A = msp432::adc::Adc<'static>;
+        //fn finalize(
         adc: &'static mut MaybeUninit<AdcDedicated<'static, A>>,
         buffer1: &'static mut [u16; capsules::adc::BUF_LEN],
         buffer2: &'static mut [u16; capsules::adc::BUF_LEN],
