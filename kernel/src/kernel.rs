@@ -263,16 +263,8 @@ impl Kernel {
     /// Returns an iterator over all processes loaded by the kernel
     pub(crate) fn get_process_iter(
         &self,
-    ) -> core::iter::FilterMap<
-        core::iter::Take<core::slice::Iter<Option<&dyn process::Process>>>,
-        fn(&Option<&'static dyn process::Process>) -> Option<&'static dyn process::Process>,
-    > {
-        fn keep_some(
-            &x: &Option<&'static dyn process::Process>,
-        ) -> Option<&'static dyn process::Process> {
-            x
-        }
-        self.processes.iter().take(4).filter_map(keep_some)
+    ) -> core::slice::Iter<Option<&'static dyn process::Process>> {
+        self.processes.iter()
     }
 
     /// Run a closure on every valid process. This will iterate the array of

@@ -712,14 +712,17 @@ impl<C: Chip> Process for ProcessStandard<'_, C> {
             return None;
         }
 
+        // assume grants allocated at boot!
+        Some(true)
         // Update the grant pointer to the address of the new allocation.
+        /*
         self.grant_pointers.map_or(None, |grant_pointers| {
             // Implement `grant_pointers[grant_num]` without a chance of a
             // panic.
             grant_pointers
                 .get(grant_num)
                 .map_or(None, |grant_entry| Some(!grant_entry.grant_ptr.is_null()))
-        })
+        })*/
     }
 
     fn allocate_grant(

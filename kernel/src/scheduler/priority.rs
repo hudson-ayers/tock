@@ -44,8 +44,8 @@ impl<C: Chip> Scheduler<C> for PrioritySched {
             let next = self
                 .kernel
                 .get_process_iter()
-                .find(|&proc| proc.ready())
-                .map_or(None, |proc| Some(proc.processid()));
+                .find(|&proc| proc.map_or(false, |p| p.ready()))
+                .map_or(None, |proc| proc.map_or(None, |p| Some(p.processid())));
             self.running.insert(next);
 
             SchedulingDecision::RunProcess((next.unwrap(), None))
@@ -62,10 +62,10 @@ impl<C: Chip> Scheduler<C> for PrioritySched {
             || self
                 .kernel
                 .get_process_iter()
-                .find(|proc| proc.ready())
+                .find(|proc| proc.map_or(false, |p| p.ready()))
                 .map_or(false, |ready_proc| {
                     self.running.map_or(false, |running| {
-                        ready_proc.processid().index < running.index
+                        ready_proc.map_or(false, |rp| rp.processid().index < running.index)
                     })
                 }))
     }

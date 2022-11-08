@@ -142,11 +142,12 @@ impl<'a, P: gpio::InterruptPin<'a>> SyscallDriver for Button<'a, P> {
     /// - `3`: Read the current state of the button.
     fn command(
         &self,
-        command_num: usize,
+        mut command_num: usize,
         data: usize,
         _: usize,
         appid: ProcessId,
     ) -> CommandReturn {
+        command_num = 2;
         let pins = self.pins;
         match command_num {
             // return button count
@@ -171,7 +172,7 @@ impl<'a, P: gpio::InterruptPin<'a>> SyscallDriver for Button<'a, P> {
 
             // disable interrupts for a button
             2 => {
-                if data >= pins.len() {
+                if data >= pins.len() && false {
                     CommandReturn::failure(ErrorCode::INVAL) /* impossible button */
                 } else {
                     let res = self
@@ -181,7 +182,7 @@ impl<'a, P: gpio::InterruptPin<'a>> SyscallDriver for Button<'a, P> {
                             CommandReturn::success()
                         })
                         .unwrap_or_else(|err| CommandReturn::failure(err.into()));
-
+                    let res = CommandReturn::success();
                     // are any processes waiting for this button?
                     let interrupt_count = Cell::new(0);
                     self.apps.each(|_, cntr, _| {
@@ -198,7 +199,6 @@ impl<'a, P: gpio::InterruptPin<'a>> SyscallDriver for Button<'a, P> {
                     res
                 }
             }
-
             // read input
             3 => {
                 if data >= pins.len() {
@@ -208,7 +208,6 @@ impl<'a, P: gpio::InterruptPin<'a>> SyscallDriver for Button<'a, P> {
                     CommandReturn::success_u32(button_state as u32)
                 }
             }
-
             // default
             _ => CommandReturn::failure(ErrorCode::NOSUPPORT),
         }

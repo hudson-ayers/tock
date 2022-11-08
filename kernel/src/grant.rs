@@ -599,34 +599,13 @@ unsafe fn write_default_array<T: Default>(base: *mut T, num: usize) {
     }
 }
 
-/// Lifetime of guard represents the lifetime a grant is held "open". On Drop,
-/// we leave grant.
-///
-/// This protects against calling `grant.enter()` without calling the
-/// corresponding `grant.leave()`, perhaps due to accidentally using the `?`
-/// operator to return early.
-struct GrantEnterLifetimeGuard<'a> {
-    /// Leaving a grant is handled through the process implementation, so must
-    /// keep a reference to the relevant process.
-    process: &'a dyn Process,
-    /// The grant number of the entered grant that we want to ensure we leave
-    /// properly.
-    grant_num: usize,
-}
-
-impl Drop for GrantEnterLifetimeGuard<'_> {
-    fn drop(&mut self) {
-        self.process.leave_grant(self.grant_num);
-    }
-}
-
 /// Enters the grant for the specified process. Caller must hold on to the grant
 /// lifetime guard while they accessing the memory in the layout (second
 /// element).
 fn enter_grant_kernel_managed(
     process: &dyn Process,
     driver_num: usize,
-) -> Result<(GrantEnterLifetimeGuard, KernelManagedLayout), ErrorCode> {
+) -> Result<KernelManagedLayout, ErrorCode> {
     let grant_num = process.lookup_grant_from_driver_num(driver_num)?;
 
     // Check if the grant has been allocated, and if not we cannot enter this
@@ -644,7 +623,7 @@ fn enter_grant_kernel_managed(
     // We know that this pointer is well aligned and initialized with meaningful
     // data when the grant region was allocated.
     let layout = unsafe { KernelManagedLayout::read_from_base(grant_base_ptr) };
-    Ok((GrantEnterLifetimeGuard { process, grant_num }, layout))
+    Ok(layout)
 }
 
 /// Subscribe to an upcall by saving the upcall in the grant region for the
@@ -653,12 +632,15 @@ pub(crate) fn subscribe(
     process: &dyn Process,
     upcall: Upcall,
 ) -> Result<Upcall, (Upcall, ErrorCode)> {
+    let grant_num = match process.lookup_grant_from_driver_num(upcall.upcall_id.driver_num) {
+        Ok(v) => v,
+        Err(e) => return Err((upcall, e.into())),
+    };
     // Enter grant and keep it open until _grant_open goes out of scope.
-    let (_grant_open, layout) =
-        match enter_grant_kernel_managed(process, upcall.upcall_id.driver_num) {
-            Ok(val) => val,
-            Err(e) => return Err((upcall, e)),
-        };
+    let layout = match enter_grant_kernel_managed(process, upcall.upcall_id.driver_num) {
+        Ok(val) => val,
+        Err(e) => return Err((upcall, e)),
+    };
 
     // Create the saved upcalls slice from the grant memory.
     //
@@ -673,7 +655,7 @@ pub(crate) fn subscribe(
 
     // Index into the saved upcall slice to get the old upcall. Use .get in case
     // userspace passed us a bad subscribe number.
-    match saved_upcalls_slice.get_mut(upcall.upcall_id.subscribe_num) {
+    let ret = match saved_upcalls_slice.get_mut(upcall.upcall_id.subscribe_num) {
         Some(saved_upcall) => {
             // Create an `Upcall` object with the old saved upcall.
             let old_upcall = Upcall::new(
@@ -691,7 +673,9 @@ pub(crate) fn subscribe(
             Ok(old_upcall)
         }
         None => Err((upcall, ErrorCode::INVAL)),
-    }
+    };
+    process.leave_grant(grant_num);
+    ret
 }
 
 /// Stores the specified read-only process buffer in the kernel managed grant
@@ -703,8 +687,12 @@ pub(crate) fn allow_ro(
     allow_num: usize,
     buffer: ReadOnlyProcessBuffer,
 ) -> Result<ReadOnlyProcessBuffer, (ReadOnlyProcessBuffer, ErrorCode)> {
+    let grant_num = match process.lookup_grant_from_driver_num(driver_num) {
+        Ok(v) => v,
+        Err(e) => return Err((buffer, e.into())),
+    };
     // Enter grant and keep it open until `_grant_open` goes out of scope.
-    let (_grant_open, layout) = match enter_grant_kernel_managed(process, driver_num) {
+    let layout = match enter_grant_kernel_managed(process, driver_num) {
         Ok(val) => val,
         Err(e) => return Err((buffer, e)),
     };
@@ -722,7 +710,7 @@ pub(crate) fn allow_ro(
 
     // Index into the saved slice to get the old value. Use .get in case
     // userspace passed us a bad allow number.
-    match saved_allow_ro_slice.get_mut(allow_num) {
+    let ret = match saved_allow_ro_slice.get_mut(allow_num) {
         Some(saved) => {
             // # Safety
             //
@@ -740,7 +728,9 @@ pub(crate) fn allow_ro(
             Ok(old_allow)
         }
         None => Err((buffer, ErrorCode::INVAL)),
-    }
+    };
+    process.leave_grant(grant_num);
+    ret
 }
 
 /// Stores the specified read-write process buffer in the kernel managed grant
@@ -752,8 +742,13 @@ pub(crate) fn allow_rw(
     allow_num: usize,
     buffer: ReadWriteProcessBuffer,
 ) -> Result<ReadWriteProcessBuffer, (ReadWriteProcessBuffer, ErrorCode)> {
+    let grant_num = match process.lookup_grant_from_driver_num(driver_num) {
+        Ok(v) => v,
+        Err(e) => return Err((buffer, e.into())),
+    };
+
     // Enter grant and keep it open until `_grant_open` goes out of scope.
-    let (_grant_open, layout) = match enter_grant_kernel_managed(process, driver_num) {
+    let layout = match enter_grant_kernel_managed(process, driver_num) {
         Ok(val) => val,
         Err(e) => return Err((buffer, e)),
     };
@@ -771,7 +766,7 @@ pub(crate) fn allow_rw(
 
     // Index into the saved slice to get the old value. Use .get in case
     // userspace passed us a bad allow number.
-    match saved_allow_rw_slice.get_mut(allow_num) {
+    let ret = match saved_allow_rw_slice.get_mut(allow_num) {
         Some(saved) => {
             // # Safety
             //
@@ -789,7 +784,9 @@ pub(crate) fn allow_rw(
             Ok(old_allow)
         }
         None => Err((buffer, ErrorCode::INVAL)),
-    }
+    };
+    process.leave_grant(grant_num);
+    ret
 }
 
 /// An instance of a grant allocated for a particular process.
@@ -1247,11 +1244,6 @@ impl<'a, T: Default, Upcalls: UpcallSize, AllowROs: AllowRoSize, AllowRWs: Allow
                 panic!("Attempted to re-enter a grant region.");
             })
             .ok()?;
-        // Ensure we leave this grant when _grant_open goes out of scope
-        let _grant_open = GrantEnterLifetimeGuard {
-            process: self.process,
-            grant_num: self.grant_num,
-        };
 
         let grant_t_align = GrantDataAlign(align_of::<T>());
         let grant_t_size = GrantDataSize(size_of::<T>());
@@ -1319,7 +1311,9 @@ impl<'a, T: Default, Upcalls: UpcallSize, AllowROs: AllowRoSize, AllowRWs: Allow
         };
 
         // Call functor and pass back value.
-        Some(fun(&mut grant_data, &kernel_data, &mut allocator))
+        let ret = Some(fun(&mut grant_data, &kernel_data, &mut allocator));
+        self.process.leave_grant(self.grant_num);
+        ret
     }
 }
 
@@ -1618,7 +1612,7 @@ impl<T: Default, Upcalls: UpcallSize, AllowROs: AllowRoSize, AllowRWs: AllowRwSi
         F: FnMut(ProcessId, &mut GrantData<T>, &GrantKernelData),
     {
         // Create a the iterator across `ProcessGrant`s for each process.
-        for pg in self.iter() {
+        for pg in self.iter().next() {
             let processid = pg.processid();
             // Since we iterating, there is no return value we need to worry
             // about.
@@ -1651,10 +1645,7 @@ pub struct Iter<
     grant: &'a Grant<T, Upcalls, AllowROs, AllowRWs>,
 
     /// Iterator over valid processes.
-    subiter: core::iter::FilterMap<
-        core::iter::Take<core::slice::Iter<'a, Option<&'static dyn Process>>>,
-        fn(&Option<&'static dyn Process>) -> Option<&'static dyn Process>,
-    >,
+    subiter: core::slice::Iter<'a, Option<&'static dyn Process>>,
 }
 
 impl<'a, T: Default, Upcalls: UpcallSize, AllowROs: AllowRoSize, AllowRWs: AllowRwSize> Iterator
@@ -1667,7 +1658,16 @@ impl<'a, T: Default, Upcalls: UpcallSize, AllowROs: AllowRoSize, AllowRWs: Allow
         // Get the next `ProcessId` from the kernel processes array that is
         // setup to use this grant. Since the iterator itself is saved calling
         // this function again will start where we left off.
-        self.subiter
-            .find_map(|process| ProcessGrant::new_if_allocated(grant, process))
+        for _i in 0..4 {
+            let p = self.subiter.next().map_or(None, |proc| {
+                proc.map_or(None, |process| {
+                    ProcessGrant::new_if_allocated(grant, process)
+                })
+            });
+            if p.is_some() {
+                return p;
+            }
+        }
+        None
     }
 }
