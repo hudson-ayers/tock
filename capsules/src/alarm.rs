@@ -68,7 +68,7 @@ impl<'a, A: Alarm<'a>> AlarmDriver<'a, A> {
         // its counter value at earliest_end. In the case that there
         // are multiple alarms in the past, just store one of them
         // and resolve ordering later, when we fire.
-        for alarm in self.app_alarms.iter() {
+        for alarm in self.app_alarms.iter().take(1) {
             alarm.enter(|alarm, _upcalls| match alarm.expiration {
                 Expiration::Enabled { reference, dt } => {
                     // Do this because `reference` shadowed below

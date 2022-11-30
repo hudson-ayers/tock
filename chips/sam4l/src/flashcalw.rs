@@ -705,7 +705,9 @@ impl FLASHCALW {
             || command == FlashCMD::CPB
             || command == FlashCMD::HSEN
         {
-            while !self.registers.fsr.is_set(FlashStatus::FRDY) {}
+            while !self.registers.fsr.is_set(FlashStatus::FRDY) {
+                break;
+            } // TODO: bound
         }
     }
 

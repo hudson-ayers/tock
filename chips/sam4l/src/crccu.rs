@@ -366,6 +366,7 @@ impl Crccu<'_> {
         }
     }
 
+    #[inline(never)]
     pub fn handle_deferred_call(&self) {
         // A deferred call is currently only issued on a call to
         // compute, in which case we need to provide the CRC to the

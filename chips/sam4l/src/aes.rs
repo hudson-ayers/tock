@@ -281,7 +281,7 @@ impl<'a> Aes<'a> {
                 // The source and destination are the same buffer
                 self.dest.map_or_else(
                     || {
-                        debug!("Called write_block() with no data");
+                        //debug!("Called write_block() with no data");
                         false
                     },
                     |dest| {
@@ -335,7 +335,7 @@ impl<'a> Aes<'a> {
     fn read_block(&self) -> bool {
         self.dest.map_or_else(
             || {
-                debug!("Called read_block() with no data");
+                //debug!("Called read_block() with no data");
                 false
             },
             |dest| {

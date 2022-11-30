@@ -213,6 +213,7 @@ impl<'a> Ast<'a> {
     }
 
     fn busy(&self) -> bool {
+        return false; // TODO REMOVE
         self.registers.sr.is_set(Status::BUSY)
     }
 
