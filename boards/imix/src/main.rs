@@ -795,6 +795,23 @@ pub unsafe fn main() {
 
     debug!("Initialization complete. Entering main loop");
 
+    hudson_hack(board_kernel, &imix, chip, &process_mgmt_cap);
+
+    board_kernel.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);
+}
+
+use crate::capabilities::ProcessManagementCapability;
+use kernel::platform::chip::Chip;
+use kernel::process::ProcessFaultPolicy;
+use kernel::Kernel;
+
+#[inline(never)]
+unsafe fn hudson_hack<KR: KernelResources<C>, C: Chip>(
+    board_kernel: &'static Kernel,
+    kernel_resources: &KR,
+    chip: &'static C,
+    process_mgmt_cap: &dyn ProcessManagementCapability,
+) {
     // These symbols are defined in the linker script.
     extern "C" {
         /// Beginning of the ROM region containing app images.
@@ -809,7 +826,7 @@ pub unsafe fn main() {
 
     kernel::process::load_and_check_processes(
         board_kernel,
-        &imix,
+        kernel_resources,
         chip,
         core::slice::from_raw_parts(
             &_sapps as *const u8,
@@ -821,12 +838,10 @@ pub unsafe fn main() {
         ),
         &mut PROCESSES,
         &FAULT_RESPONSE,
-        &process_mgmt_cap,
+        process_mgmt_cap,
     )
     .unwrap_or_else(|err| {
         debug!("Error loading processes!");
         debug!("{:?}", err);
     });
-
-    board_kernel.kernel_loop(&imix, chip, Some(&imix.ipc), &main_cap);
 }
